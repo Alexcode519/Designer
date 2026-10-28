@@ -12,11 +12,16 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Can ask for their link to be emailed again with "Already started?" on the same page.
 - Opens their private link. No account or app needed.
 - Uploads photos (JPEG or PNG). Large photos are sent in small pieces, so the hosting upload limit doesn't matter.
-- Picks a layout for each spread from 10 options, then drags photos from the photo panel (always beside the spread) into the spaces, or drops photos straight from their computer onto a space. On a phone: tap a photo, then tap a space.
-- Taps a placed photo to resize it (mouse wheel, + and − buttons, or the slider) and drag it into position, or drags one placed photo onto another to swap them.
+- Lays out each spread with photo boxes they can place anywhere: drag a box to move it, pull its corner or edge handles to resize it (the size shows in mm), turn it with the round handle, and stack boxes over each other (bring forward, send back). Boxes snap to the page edges, the middle fold, the safe area and other boxes.
+- Starts a spread from one of 13 layouts (up to 12 photos per spread), then changes anything.
+- Drags photos from the photo panel (always beside the spread) onto a box to fill it, or onto an empty part of the spread to add a new box. Photos can also be dropped straight from their computer. On a phone: tap a photo, then tap a box or an empty spot.
+- Chooses per box whether the photo fills the box (cropped; zoom with the mouse wheel, + and − or the slider, and "Move photo in box" to reposition it) or shows whole. Swaps the photos of two boxes, duplicates or deletes boxes.
+- Sees red trim lines (anything outside is cut off) and green safe-area lines (keep faces inside) on every spread.
+- Sees a tick and "Spread N" on photos already used.
+- Undoes and redoes changes (buttons or Ctrl+Z / Ctrl+Y). Arrow keys nudge the selected box by 1 mm (10 mm with Shift); Delete removes it.
 - Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
 - Adds, deletes and reorders spreads, within the minimum and maximum you set.
-- Sees a "Low quality" warning when a photo is enlarged too much to print sharply.
+- Sees a warning on a photo, and under the spread, when it is enlarged too much to print sharply.
 - Everything saves automatically. Clicking **Approve for printing** locks the album.
 
 **For you:**
@@ -65,12 +70,14 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 ## Not in this first version
 
 - Covers (spreads only for now)
-- Text on pages
-- Background colours other than white
+- Text on pages (planned next)
+- Background colours other than white (planned next)
+- Image adjustments such as borders, brightness and opacity
 - Taking payment for upgrades or extra spreads
 
 ## Developer notes
 
 - PHP 7.4+, WordPress 6.2+, with the GD image library (standard on most hosts). No build step.
-- `includes/render.php` and `assets/editor.js` share the crop logic. If you change one, change the other.
+- `includes/render.php` and `assets/editor.js` share the crop and rotation logic. If you change one, change the other.
+- Designs saved by version 0.2 and earlier (fixed layout spaces) are converted to photo boxes automatically when opened.
 - Filters: `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.

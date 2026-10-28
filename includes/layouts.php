@@ -55,6 +55,25 @@ function sad_layouts() {
 				array( 0.755, 0.515, 0.215, 0.425 ),
 			),
 		),
+		'one-big-two-small' => array(
+			'name'  => 'Three photos per page',
+			'slots' => array(
+				array( 0.03, 0.06, 0.44, 0.425 ),
+				array( 0.03, 0.515, 0.215, 0.425 ),
+				array( 0.255, 0.515, 0.215, 0.425 ),
+				array( 0.53, 0.06, 0.44, 0.425 ),
+				array( 0.53, 0.515, 0.215, 0.425 ),
+				array( 0.755, 0.515, 0.215, 0.425 ),
+			),
+		),
+		'grid-eight'        => array(
+			'name'  => 'Grid of eight',
+			'slots' => sad_grid_slots( 2, 2 ),
+		),
+		'grid-twelve'       => array(
+			'name'  => 'Grid of twelve',
+			'slots' => sad_grid_slots( 3, 2 ),
+		),
 		'right-only'        => array(
 			'name'  => 'Blank left, framed right',
 			'slots' => array( array( 0.53, 0.06, 0.44, 0.88 ) ),
@@ -67,6 +86,24 @@ function sad_layouts() {
 	 * @param array $layouts Layout id => array( 'name' => string, 'slots' => array of [x, y, w, h] fractions ).
 	 */
 	return apply_filters( 'sad_layouts', $layouts );
+}
+
+/**
+ * A framed grid on each page: $cols x $rows photos per page, with a white margin and gaps.
+ */
+function sad_grid_slots( $cols, $rows ) {
+	$slots = array();
+	$gap   = 0.01;
+	$w     = ( 0.44 - $gap * ( $cols - 1 ) ) / $cols;
+	$h     = ( 0.88 - 0.02 * ( $rows - 1 ) ) / $rows;
+	foreach ( array( 0.03, 0.53 ) as $page_x ) {
+		for ( $r = 0; $r < $rows; $r++ ) {
+			for ( $c = 0; $c < $cols; $c++ ) {
+				$slots[] = array( round( $page_x + $c * ( $w + $gap ), 4 ), round( 0.06 + $r * ( $h + 0.02 ), 4 ), round( $w, 4 ), round( $h, 4 ) );
+			}
+		}
+	}
+	return $slots;
 }
 
 function sad_layout_slots( $layout_id ) {
@@ -94,7 +131,7 @@ function sad_templates() {
 		'story'   => array(
 			'name'        => 'Story',
 			'description' => 'More photos per spread to tell the whole day.',
-			'layouts'     => array( 'left-full-right-four', 'two-and-two', 'left-full-right-two', 'left-two-right-full', 'two-and-two', 'two-full' ),
+			'layouts'     => array( 'left-full-right-four', 'one-big-two-small', 'two-and-two', 'left-full-right-two', 'grid-eight', 'left-two-right-full', 'two-full' ),
 		),
 	);
 

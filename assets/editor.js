@@ -1,12 +1,14 @@
 /**
  * Snippets Album Designer: the client-facing editor.
  *
- * The client uploads photos, picks a layout for each spread, places photos in the spaces,
- * pans and zooms them, and approves the album. Everything autosaves.
+ * The client uploads photos and lays out each spread with photo boxes that can be moved, resized,
+ * rotated and stacked anywhere, starting from a layout or from scratch, then approves the album.
+ * Everything autosaves, and changes can be undone.
  *
- * Crop maths must match sad_source_crop() in includes/render.php: a photo covers its space,
- * is enlarged by `zoom`, and `x`/`y` (0 to 1) choose which part of the overflow shows.
- * CSS background-position percentages work exactly that way.
+ * Box positions are fractions of the trimmed spread (see sad_get_design() in includes/albums.php).
+ * Crop maths must match sad_draw_item() in includes/render.php: in "fill" a photo covers its box,
+ * is enlarged by `zoom`, and `px`/`py` (0 to 1) choose which part of the overflow shows, which is
+ * exactly how CSS background-position percentages work; in "fit" it is contained and centred.
  */
 ( function () {
 	'use strict';
@@ -22,17 +24,27 @@
 		layouts[ layout.id ] = layout;
 	} );
 
+	var HANDLES = [ 'nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w' ];
+	var MIN_BOX_MM = 5;
+
 	var state = {
 		album: null,
 		design: null,
 		photos: {},
 		photoOrder: [],
 		current: 0,
-		selectedSlot: null,
+		selectedItem: null,
+		adjusting: false,
+		swapFrom: null,
 		armedPhoto: null,
 		selecting: false,
 		selected: {},
 		template: config.templates && config.templates.length ? config.templates[0].id : null,
+		history: [],
+		future: [],
+		checkpointKey: null,
+		checkpointTime: 0,
+		scale: 1,
 		saveTimer: null,
 		saving: false,
 		dirty: false,
@@ -101,42 +113,156 @@
 		return state.album.status === 'approved';
 	}
 
+	function clamp( value, min, max ) {
+		return Math.min( max, Math.max( min, value ) );
+	}
+
+	/** Spread sizes in mm: trimmed (tw x th), bleed per edge, safe margin. */
+	function geo() {
+		var size = state.album.size;
+		var tw = size.width_mm * 2;
+		var th = size.height_mm;
+		var b = state.album.bleedMm || 0;
+		return { tw: tw, th: th, b: b, cw: tw + 2 * b, ch: th + 2 * b, safe: state.album.safeMm || 0 };
+	}
+
 	function spreadAspect() {
-		return ( state.album.size.width_mm * 2 ) / state.album.size.height_mm;
+		var g = geo();
+		return g.tw / g.th;
 	}
 
-	function slotsFor( spread ) {
-		return layouts[ spread.layout ] ? layouts[ spread.layout ].slots : layouts[ 'two-full' ].slots;
+	function currentSpread() {
+		return state.design.spreads[ state.current ];
 	}
 
-	function emptySlot() {
-		return { photo: null, zoom: 1, x: 0.5, y: 0.5 };
+	function selectedItem() {
+		var spread = currentSpread();
+		return state.selectedItem !== null && spread ? spread.items[ state.selectedItem ] || null : null;
 	}
 
-	function usageCounts() {
-		var counts = {};
-		state.design.spreads.forEach( function ( spread ) {
-			spread.slots.forEach( function ( slot ) {
-				if ( slot.photo ) {
-					counts[ slot.photo ] = ( counts[ slot.photo ] || 0 ) + 1;
+	/** A box in mm from the top left of the trimmed spread. */
+	function itemMm( item ) {
+		var g = geo();
+		return { x: item.x * g.tw, y: item.y * g.th, w: item.w * g.tw, h: item.h * g.th };
+	}
+
+	function setItemMm( item, rect ) {
+		var g = geo();
+		item.x = rect.x / g.tw;
+		item.y = rect.y / g.th;
+		item.w = rect.w / g.tw;
+		item.h = rect.h / g.th;
+	}
+
+	function newItem( photo, x, y, w, h ) {
+		return { photo: photo || null, x: x, y: y, w: w, h: h, rot: 0, fit: 'fill', zoom: 1, px: 0.5, py: 0.5 };
+	}
+
+	/** Boxes for a layout; edges touching the trim run out into the bleed. Matches sad_layout_items(). */
+	function layoutItems( layoutId, photoIds ) {
+		var g = geo();
+		var bx = g.b / g.tw;
+		var by = g.b / g.th;
+		var eps = 0.001;
+		var slots = ( layouts[ layoutId ] || layouts[ 'two-full' ] ).slots;
+		return slots.map( function ( r, i ) {
+			var x = r[ 0 ] <= eps ? -bx : r[ 0 ];
+			var y = r[ 1 ] <= eps ? -by : r[ 1 ];
+			var x2 = r[ 0 ] + r[ 2 ] >= 1 - eps ? 1 + bx : r[ 0 ] + r[ 2 ];
+			var y2 = r[ 1 ] + r[ 3 ] >= 1 - eps ? 1 + by : r[ 1 ] + r[ 3 ];
+			return newItem( ( photoIds || [] )[ i ], x, y, x2 - x, y2 - y );
+		} );
+	}
+
+	/** Spread numbers (from 1) each photo is used on. */
+	function usage() {
+		var used = {};
+		state.design.spreads.forEach( function ( spread, n ) {
+			spread.items.forEach( function ( item ) {
+				if ( item.photo ) {
+					used[ item.photo ] = used[ item.photo ] || [];
+					if ( used[ item.photo ].indexOf( n + 1 ) === -1 ) {
+						used[ item.photo ].push( n + 1 );
+					}
 				}
 			} );
 		} );
-		return counts;
+		return used;
 	}
 
-	/** Effective print resolution of a photo in a space, in dots per inch. */
-	function slotDpi( spread, index ) {
-		var slot = spread.slots[ index ];
-		var photo = slot && state.photos[ slot.photo ];
+	/** Effective print resolution of a photo in its box, in dots per inch. */
+	function itemDpi( item ) {
+		var photo = item.photo && state.photos[ item.photo ];
 		if ( ! photo ) {
 			return null;
 		}
-		var rect = slotsFor( spread )[ index ];
-		var slotW = rect[ 2 ] * state.album.size.width_mm * 2;
-		var slotH = rect[ 3 ] * state.album.size.height_mm;
-		var scale = Math.max( slotW / photo.width, slotH / photo.height ) * slot.zoom; // mm per pixel
-		return Math.round( 25.4 / scale );
+		var m = itemMm( item );
+		var mmPerPx = item.fit === 'fit'
+			? Math.min( m.w / photo.width, m.h / photo.height )
+			: Math.max( m.w / photo.width, m.h / photo.height ) * item.zoom;
+		return Math.round( 25.4 / mmPerPx );
+	}
+
+	function isLowRes( item ) {
+		var dpi = itemDpi( item );
+		return dpi !== null && dpi < state.album.minDpi;
+	}
+
+	/* ---------- undo ---------- */
+
+	/**
+	 * Call before changing the design. Changes with the same key in quick succession (a slider
+	 * being dragged, arrow-key nudges) undo together.
+	 */
+	function checkpoint( key ) {
+		var now = Date.now();
+		if ( key && key === state.checkpointKey && now - state.checkpointTime < 1200 ) {
+			state.checkpointTime = now;
+			return;
+		}
+		state.checkpointKey = key || null;
+		state.checkpointTime = now;
+		state.history.push( JSON.stringify( state.design ) );
+		if ( state.history.length > 80 ) {
+			state.history.shift();
+		}
+		state.future = [];
+		renderUndo();
+	}
+
+	function undo() {
+		if ( ! state.history.length || isLocked() ) {
+			return;
+		}
+		state.future.push( JSON.stringify( state.design ) );
+		state.design = JSON.parse( state.history.pop() );
+		afterHistory();
+	}
+
+	function redo() {
+		if ( ! state.future.length || isLocked() ) {
+			return;
+		}
+		state.history.push( JSON.stringify( state.design ) );
+		state.design = JSON.parse( state.future.pop() );
+		afterHistory();
+	}
+
+	function afterHistory() {
+		state.checkpointKey = null;
+		state.current = clamp( state.current, 0, state.design.spreads.length - 1 );
+		state.selectedItem = null;
+		state.adjusting = false;
+		state.swapFrom = null;
+		scheduleSave();
+		renderAll();
+	}
+
+	function renderUndo() {
+		if ( dom.undo ) {
+			dom.undo.disabled = ! state.history.length;
+			dom.redo.disabled = ! state.future.length;
+		}
 	}
 
 	/* ---------- saving ---------- */
@@ -188,50 +314,160 @@
 		}
 	} );
 
+	/** Saves, and redraws everything that shows the design. */
+	function changed() {
+		scheduleSave();
+		renderAll();
+	}
+
 	/* ---------- design changes ---------- */
 
 	function setLayout( layoutId ) {
-		var spread = state.design.spreads[ state.current ];
-		var placed = spread.slots.filter( function ( slot ) {
-			return slot.photo;
+		var spread = currentSpread();
+		var placed = spread.items.filter( function ( item ) {
+			return item.photo;
+		} ).map( function ( item ) {
+			return item.photo;
 		} );
 		var count = layouts[ layoutId ].slots.length;
-		var slots = [];
-		for ( var i = 0; i < count; i++ ) {
-			var previous = placed[ i ];
-			slots.push( previous ? { photo: previous.photo, zoom: 1, x: 0.5, y: 0.5 } : emptySlot() );
-		}
+		checkpoint();
 		spread.layout = layoutId;
-		spread.slots = slots;
-		state.selectedSlot = null;
+		spread.items = layoutItems( layoutId, placed );
+		state.selectedItem = null;
 		if ( placed.length > count ) {
-			toast( 'This layout has fewer spaces, so ' + ( placed.length - count ) + ' photo(s) were taken off this spread.' );
+			toast( 'This layout has fewer boxes, so ' + ( placed.length - count ) + ' photo(s) were taken off this spread. Undo brings them back.' );
 		}
-		scheduleSave();
-		renderAll();
+		changed();
 	}
 
-	function placePhoto( slotIndex, photoId ) {
-		var spread = state.design.spreads[ state.current ];
-		spread.slots[ slotIndex ] = { photo: photoId, zoom: 1, x: 0.5, y: 0.5 };
-		state.selectedSlot = slotIndex;
+	function selectItem( index ) {
+		if ( state.selectedItem !== index ) {
+			state.adjusting = false;
+		}
+		state.selectedItem = index;
+		renderSelection();
+		renderItemTools();
+	}
+
+	function placeInItem( index, photoId ) {
+		var item = currentSpread().items[ index ];
+		checkpoint();
+		item.photo = photoId;
+		item.zoom = 1;
+		item.px = 0.5;
+		item.py = 0.5;
+		state.selectedItem = index;
 		state.armedPhoto = null;
-		scheduleSave();
-		renderAll();
+		changed();
 	}
 
-	/** Swaps two spaces on the current spread, keeping each photo's own zoom and position. */
-	function swapSlots( from, to ) {
-		var slots = state.design.spreads[ state.current ].slots;
-		if ( from === to || ! slots[ from ] || ! slots[ to ] ) {
+	/**
+	 * Adds a box for a photo, shaped like the photo and centred on a point (mm from the top left of
+	 * the trimmed spread), or on the right-hand page.
+	 */
+	function addItem( photoId, at ) {
+		var spread = currentSpread();
+		var g = geo();
+		var photo = photoId && state.photos[ photoId ];
+		var ratio = photo ? photo.width / photo.height : 1.5;
+		var h = g.th * 0.5;
+		var w = h * ratio;
+		if ( w > g.tw * 0.45 ) {
+			w = g.tw * 0.45;
+			h = w / ratio;
+		}
+		var cx = at ? at.x : g.tw * 0.75;
+		var cy = at ? at.y : g.th / 2;
+		cx = clamp( cx, w / 2 - g.b, g.tw + g.b - w / 2 );
+		cy = clamp( cy, h / 2 - g.b, g.th + g.b - h / 2 );
+		var item = newItem( photoId, 0, 0, 0, 0 );
+		setItemMm( item, { x: cx - w / 2, y: cy - h / 2, w: w, h: h } );
+		checkpoint();
+		spread.items.push( item );
+		spread.layout = null;
+		state.selectedItem = spread.items.length - 1;
+		state.armedPhoto = null;
+		changed();
+	}
+
+	function deleteItem( index ) {
+		checkpoint();
+		currentSpread().items.splice( index, 1 );
+		currentSpread().layout = null;
+		state.selectedItem = null;
+		state.adjusting = false;
+		changed();
+	}
+
+	function duplicateItem( index ) {
+		var spread = currentSpread();
+		var copy = JSON.parse( JSON.stringify( spread.items[ index ] ) );
+		var g = geo();
+		copy.x += 8 / g.tw;
+		copy.y += 8 / g.th;
+		checkpoint();
+		spread.items.push( copy );
+		spread.layout = null;
+		state.selectedItem = spread.items.length - 1;
+		changed();
+	}
+
+	/** Moves a box up (+1) or down (-1) the stack, or to the top/bottom (+/-Infinity). */
+	function restack( index, delta ) {
+		var items = currentSpread().items;
+		var to = clamp( delta === Infinity ? items.length - 1 : delta === -Infinity ? 0 : index + delta, 0, items.length - 1 );
+		if ( to === index ) {
 			return;
 		}
-		var moving = slots[ from ];
-		slots[ from ] = { photo: slots[ to ].photo, zoom: 1, x: 0.5, y: 0.5 };
-		slots[ to ] = { photo: moving.photo, zoom: 1, x: 0.5, y: 0.5 };
-		state.selectedSlot = to;
-		scheduleSave();
-		renderAll();
+		checkpoint();
+		items.splice( to, 0, items.splice( index, 1 )[ 0 ] );
+		state.selectedItem = to;
+		changed();
+	}
+
+	/** Swaps the photos of two boxes, each keeping its own crop. */
+	function swapItems( from, to ) {
+		var items = currentSpread().items;
+		if ( from === to || ! items[ from ] || ! items[ to ] ) {
+			return;
+		}
+		checkpoint();
+		[ 'photo', 'zoom', 'px', 'py', 'fit' ].forEach( function ( key ) {
+			var value = items[ from ][ key ];
+			items[ from ][ key ] = items[ to ][ key ];
+			items[ to ][ key ] = value;
+		} );
+		state.swapFrom = null;
+		state.selectedItem = to;
+		changed();
+	}
+
+	function setFit( item, fit ) {
+		if ( item.fit === fit ) {
+			return;
+		}
+		checkpoint();
+		item.fit = fit;
+		item.zoom = 1;
+		item.px = 0.5;
+		item.py = 0.5;
+		changed();
+	}
+
+	/** Reshapes a box to match its photo, keeping its width and centre, so nothing is cropped. */
+	function matchPhotoShape( item ) {
+		var photo = state.photos[ item.photo ];
+		if ( ! photo ) {
+			return;
+		}
+		var m = itemMm( item );
+		var h = m.w * photo.height / photo.width;
+		checkpoint();
+		setItemMm( item, { x: m.x, y: m.y + ( m.h - h ) / 2, w: m.w, h: h } );
+		item.zoom = 1;
+		item.px = 0.5;
+		item.py = 0.5;
+		changed();
 	}
 
 	/* ---------- auto-fill ---------- */
@@ -307,15 +543,9 @@
 			// One upright photo across a whole spread crops badly; give it one page instead.
 			if ( ids.length === 1 && layout === 'full' && state.photos[ ids[ 0 ] ].height > state.photos[ ids[ 0 ] ].width && layouts[ 'right-only' ] ) {
 				layout = 'right-only';
-				count = 1;
 			}
 			next += ids.length;
-
-			var slots = [];
-			for ( var s = 0; s < layoutCapacity( layout ); s++ ) {
-				slots.push( ids[ s ] ? { photo: ids[ s ], zoom: 1, x: 0.5, y: 0.5 } : emptySlot() );
-			}
-			result.push( { layout: layout, slots: slots } );
+			result.push( { layout: layout, items: layoutItems( layout, ids ) } );
 		}
 		return { spreads: result, placed: next, skipped: total - next };
 	}
@@ -330,22 +560,22 @@
 			return;
 		}
 		var hasWork = state.design.spreads.some( function ( spread ) {
-			return spread.slots.some( function ( slot ) {
-				return slot.photo;
+			return spread.items.some( function ( item ) {
+				return item.photo;
 			} );
 		} );
-		if ( hasWork && ! window.confirm( 'Auto-fill replaces the spreads you have now with a new layout. Continue?' ) ) {
+		if ( hasWork && ! window.confirm( 'Auto-fill replaces the spreads you have now with a new layout. You can undo it afterwards. Continue?' ) ) {
 			return;
 		}
 		var filled = buildAutoFill( template, photoIds );
+		checkpoint();
 		state.design.spreads = filled.spreads;
 		state.current = 0;
-		state.selectedSlot = null;
+		state.selectedItem = null;
 		state.armedPhoto = null;
 		state.selecting = false;
-		scheduleSave();
-		renderAll();
-		var message = 'Placed ' + filled.placed + ' photos on ' + filled.spreads.length + ' spreads. Swap or move anything you like.';
+		changed();
+		var message = 'Placed ' + filled.placed + ' photos on ' + filled.spreads.length + ' spreads. Move, resize or swap anything you like.';
 		if ( filled.skipped > 0 ) {
 			message = 'Placed ' + filled.placed + ' photos. ' + filled.skipped + ' did not fit in the ' + state.album.maxSpreads + ' spreads allowed.';
 		}
@@ -357,11 +587,11 @@
 			toast( 'Your album can have up to ' + state.album.maxSpreads + ' spreads.' );
 			return;
 		}
-		state.design.spreads.splice( state.current + 1, 0, { layout: 'two-full', slots: [ emptySlot(), emptySlot() ] } );
+		checkpoint();
+		state.design.spreads.splice( state.current + 1, 0, { layout: 'two-full', items: layoutItems( 'two-full' ) } );
 		state.current += 1;
-		state.selectedSlot = null;
-		scheduleSave();
-		renderAll();
+		state.selectedItem = null;
+		changed();
 	}
 
 	function deleteSpread() {
@@ -371,11 +601,11 @@
 		if ( ! window.confirm( 'Delete spread ' + ( state.current + 1 ) + '? The photos stay in your photo tray.' ) ) {
 			return;
 		}
+		checkpoint();
 		state.design.spreads.splice( state.current, 1 );
 		state.current = Math.min( state.current, state.design.spreads.length - 1 );
-		state.selectedSlot = null;
-		scheduleSave();
-		renderAll();
+		state.selectedItem = null;
+		changed();
 	}
 
 	function moveSpread( delta ) {
@@ -383,17 +613,18 @@
 		if ( to < 0 || to >= state.design.spreads.length ) {
 			return;
 		}
+		checkpoint();
 		var spreads = state.design.spreads;
-		var moving = spreads.splice( state.current, 1 )[ 0 ];
-		spreads.splice( to, 0, moving );
+		spreads.splice( to, 0, spreads.splice( state.current, 1 )[ 0 ] );
 		state.current = to;
-		scheduleSave();
-		renderAll();
+		changed();
 	}
 
 	function goTo( index ) {
-		state.current = Math.max( 0, Math.min( index, state.design.spreads.length - 1 ) );
-		state.selectedSlot = null;
+		state.current = clamp( index, 0, state.design.spreads.length - 1 );
+		state.selectedItem = null;
+		state.adjusting = false;
+		state.swapFrom = null;
 		renderAll();
 	}
 
@@ -410,7 +641,8 @@
 
 	/**
 	 * @param {FileList} fileList
-	 * @param {Object}   [target] { spread, slot }: place the first photo there once uploaded.
+	 * @param {Object}   [target] { spread, item } to place the first photo in a box once uploaded,
+	 *                            or { spread, at: {x, y} } to add a box for it there (mm).
 	 */
 	function uploadFiles( fileList, target ) {
 		var files = Array.prototype.filter.call( fileList, function ( file ) {
@@ -433,12 +665,23 @@
 					.then( function ( photo ) {
 						state.photos[ photo.id ] = photo;
 						state.photoOrder.push( photo.id );
-						if ( target && state.design.spreads.indexOf( target.spread ) !== -1 && target.spread.slots[ target.slot ] ) {
-							target.spread.slots[ target.slot ] = { photo: photo.id, zoom: 1, x: 0.5, y: 0.5 };
+						var spreadIndex = target ? state.design.spreads.indexOf( target.spread ) : -1;
+						if ( spreadIndex !== -1 && ! isLocked() ) {
+							var place = target;
 							target = null;
-							scheduleSave();
-							renderAll();
-							return;
+							if ( place.item && place.spread.items.indexOf( place.item ) !== -1 ) {
+								checkpoint();
+								place.item.photo = photo.id;
+								place.item.zoom = 1;
+								place.item.px = 0.5;
+								place.item.py = 0.5;
+								changed();
+								return;
+							}
+							if ( place.at && spreadIndex === state.current ) {
+								addItem( photo.id, place.at );
+								return;
+							}
 						}
 						renderTray();
 					} )
@@ -487,7 +730,7 @@
 	}
 
 	function deletePhoto( photoId ) {
-		var used = usageCounts()[ photoId ];
+		var used = usage()[ photoId ];
 		var message = used ? 'This photo is used in your album. Remove it from the album and delete it?' : 'Delete this photo?';
 		if ( ! window.confirm( message ) ) {
 			return;
@@ -500,8 +743,10 @@
 				return id !== photoId;
 			} );
 			state.design.spreads.forEach( function ( spread ) {
-				spread.slots = spread.slots.map( function ( slot ) {
-					return slot.photo === photoId ? emptySlot() : slot;
+				spread.items.forEach( function ( item ) {
+					if ( item.photo === photoId ) {
+						item.photo = null;
+					}
 				} );
 			} );
 			if ( used ) {
@@ -521,10 +766,12 @@
 			list.push( 'Your album needs at least ' + state.album.minSpreads + ' spreads (it has ' + state.design.spreads.length + ').' );
 		}
 		state.design.spreads.forEach( function ( spread, n ) {
-			if ( spread.slots.some( function ( slot ) {
-				return ! slot.photo;
+			if ( ! spread.items.length ) {
+				list.push( 'Spread ' + ( n + 1 ) + ' is blank.' );
+			} else if ( spread.items.some( function ( item ) {
+				return ! item.photo || ! state.photos[ item.photo ];
 			} ) ) {
-				list.push( 'Spread ' + ( n + 1 ) + ' has an empty photo space.' );
+				list.push( 'Spread ' + ( n + 1 ) + ' has an empty photo box. Add a photo or delete the box.' );
 			}
 		} );
 		return list;
@@ -533,16 +780,11 @@
 	function lowResolution() {
 		var list = [];
 		state.design.spreads.forEach( function ( spread, n ) {
-			spread.slots.forEach( function ( slot, i ) {
-				var dpi = slotDpi( spread, i );
-				if ( dpi && dpi < state.album.minDpi ) {
-					list.push( n + 1 );
-				}
-			} );
+			if ( spread.items.some( isLowRes ) ) {
+				list.push( n + 1 );
+			}
 		} );
-		return list.filter( function ( value, index ) {
-			return list.indexOf( value ) === index;
-		} );
+		return list;
 	}
 
 	function approve() {
@@ -552,7 +794,7 @@
 			return;
 		}
 		var soft = lowResolution();
-		var message = 'Approve your album for printing?\n\nAfter you approve, the design is locked and goes to print. Please check every spread first.';
+		var message = 'Approve your album for printing?\n\nAfter you approve, the design is locked and goes to print. Please check every spread first, and keep faces and text inside the green safe lines.';
 		if ( soft.length ) {
 			message += '\n\nSome photos may print soft because they are enlarged a lot (spreads ' + soft.join( ', ' ) + ').';
 		}
@@ -573,247 +815,697 @@
 			} );
 	}
 
-	/* ---------- rendering ---------- */
+	/* ---------- drawing ---------- */
 
-	/** Draws a spread into `stage`, sized `width` px wide. */
-	function drawSpread( stage, spread, width, interactive ) {
-		var height = width / spreadAspect();
-		stage.innerHTML = '';
-		stage.style.width = width + 'px';
-		stage.style.height = height + 'px';
-
-		slotsFor( spread ).forEach( function ( rect, index ) {
-			var slot = spread.slots[ index ] || emptySlot();
-			var w = rect[ 2 ] * width;
-			var h = rect[ 3 ] * height;
-			var node = el( 'div', { class: 'sad-slot', 'data-index': String( index ) } );
-			node.style.left = rect[ 0 ] * 100 + '%';
-			node.style.top = rect[ 1 ] * 100 + '%';
-			node.style.width = rect[ 2 ] * 100 + '%';
-			node.style.height = rect[ 3 ] * 100 + '%';
-
-			var photo = slot.photo && state.photos[ slot.photo ];
-			if ( photo ) {
-				var scale = Math.max( w / photo.width, h / photo.height ) * slot.zoom;
-				node.style.backgroundImage = 'url("' + photo.preview + '")';
-				node.style.backgroundSize = photo.width * scale + 'px ' + photo.height * scale + 'px';
-				node.style.backgroundPosition = slot.x * 100 + '% ' + slot.y * 100 + '%';
-				node.classList.add( 'sad-slot--filled' );
-			}
-
-			if ( interactive ) {
-				decorateSlot( node, spread, index, photo );
-			}
-			stage.appendChild( node );
-		} );
-
-		stage.appendChild( el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } ) );
+	/** Positions a box (or its selection frame) at `scale` px per mm, offset by `off` mm. */
+	function position( node, item, scale, off ) {
+		var m = itemMm( item );
+		node.style.left = ( off + m.x ) * scale + 'px';
+		node.style.top = ( off + m.y ) * scale + 'px';
+		node.style.width = m.w * scale + 'px';
+		node.style.height = m.h * scale + 'px';
+		node.style.transform = item.rot ? 'rotate(' + item.rot + 'deg)' : '';
 	}
 
-	function decorateSlot( node, spread, index, photo ) {
+	function paint( node, item, scale ) {
+		var photo = item.photo && state.photos[ item.photo ];
+		node.style.backgroundImage = photo ? 'url("' + photo.preview + '")' : '';
+		node.classList.toggle( 'sad-item__img--empty', ! photo );
+		if ( ! photo ) {
+			return;
+		}
+		if ( item.fit === 'fit' ) {
+			node.style.backgroundSize = 'contain';
+			node.style.backgroundPosition = '50% 50%';
+			return;
+		}
+		var m = itemMm( item );
+		var w = m.w * scale;
+		var h = m.h * scale;
+		var s = Math.max( w / photo.width, h / photo.height ) * item.zoom;
+		node.style.backgroundSize = photo.width * s + 'px ' + photo.height * s + 'px';
+		node.style.backgroundPosition = item.px * 100 + '% ' + item.py * 100 + '%';
+	}
+
+	/**
+	 * Draws a spread's boxes into `container`. The editor stage shows the bleed (offset b mm);
+	 * thumbnails show the trimmed spread only (offset 0, overflow hidden).
+	 */
+	function drawItems( container, spread, scale, off, interactive ) {
+		var nodes = [];
+		spread.items.forEach( function ( item, index ) {
+			var img = el( 'div', { class: 'sad-item__img' } );
+			var node = el( 'div', { class: 'sad-item', 'data-index': String( index ) }, [ img ] );
+			position( node, item, scale, off );
+			paint( img, item, scale );
+			if ( interactive ) {
+				decorateItem( node, item, index );
+			}
+			container.appendChild( node );
+			nodes.push( node );
+		} );
+		return nodes;
+	}
+
+	function decorateItem( node, item, index ) {
+		var photo = item.photo && state.photos[ item.photo ];
 		node.setAttribute( 'tabindex', '0' );
 		node.setAttribute( 'role', 'button' );
-		node.setAttribute( 'aria-label', photo ? 'Photo space ' + ( index + 1 ) + ': ' + photo.name : 'Empty photo space ' + ( index + 1 ) );
-		if ( state.selectedSlot === index ) {
-			node.classList.add( 'sad-slot--selected' );
+		node.setAttribute( 'aria-label', photo ? 'Photo box ' + ( index + 1 ) + ': ' + photo.name : 'Empty photo box ' + ( index + 1 ) );
+		if ( ! photo && ! isLocked() ) {
+			node.appendChild( el( 'span', { class: 'sad-item__hint', text: state.armedPhoto ? 'Tap to place' : 'Drop a photo here' } ) );
 		}
-		if ( ! photo ) {
-			node.appendChild( el( 'span', { class: 'sad-slot__hint', text: isLocked() ? '' : ( state.armedPhoto ? 'Tap to place' : 'Drop a photo here' ) } ) );
-		} else {
-			var dpi = slotDpi( spread, index );
-			if ( dpi && dpi < state.album.minDpi ) {
-				node.appendChild( el( 'span', { class: 'sad-slot__warn', title: 'About ' + dpi + ' dpi. This photo may print soft at this size.', text: 'Low quality' } ) );
-			}
+		if ( photo && isLowRes( item ) ) {
+			node.appendChild( el( 'span', {
+				class: 'sad-item__warn',
+				title: 'About ' + itemDpi( item ) + ' dpi. This photo may print soft at this size.',
+				text: '⚠',
+			} ) );
 		}
 		if ( isLocked() ) {
 			return;
 		}
 
-		node.addEventListener( 'click', function () {
-			if ( state.armedPhoto ) {
-				placePhoto( index, state.armedPhoto );
+		node.addEventListener( 'pointerdown', function ( event ) {
+			if ( event.button !== 0 ) {
 				return;
 			}
-			state.selectedSlot = index;
-			renderAll();
+			if ( state.armedPhoto ) {
+				placeInItem( index, state.armedPhoto );
+				return;
+			}
+			if ( state.swapFrom !== null ) {
+				if ( state.swapFrom !== index ) {
+					swapItems( state.swapFrom, index );
+				}
+				return;
+			}
+			event.preventDefault();
+			node.focus( { preventScroll: true } );
+			if ( state.selectedItem !== index ) {
+				selectItem( index );
+			}
+			if ( state.adjusting && photo && item.fit === 'fill' ) {
+				startPan( event, node, item );
+			} else {
+				startMove( event, node, item, index );
+			}
 		} );
-		node.addEventListener( 'keydown', function ( event ) {
-			if ( event.key === 'Enter' || event.key === ' ' ) {
-				event.preventDefault();
-				node.click();
+		node.addEventListener( 'dblclick', function () {
+			if ( photo && item.fit === 'fill' ) {
+				state.adjusting = ! state.adjusting;
+				renderSelection();
+				renderItemTools();
 			}
 		} );
 		node.addEventListener( 'dragover', function ( event ) {
 			event.preventDefault();
-			node.classList.add( 'sad-slot--over' );
+			node.classList.add( 'sad-item--over' );
 		} );
 		node.addEventListener( 'dragleave', function () {
-			node.classList.remove( 'sad-slot--over' );
+			node.classList.remove( 'sad-item--over' );
 		} );
 		node.addEventListener( 'drop', function ( event ) {
-			node.classList.remove( 'sad-slot--over' );
+			node.classList.remove( 'sad-item--over' );
 			if ( hasFiles( event ) ) {
-				return; // Handled by the page-wide file drop, which knows this space.
+				return; // Handled by the page-wide file drop, which knows this box.
 			}
 			event.preventDefault();
-			var from = event.dataTransfer.getData( 'text/x-sad-slot' );
-			if ( from !== '' && ! isNaN( parseInt( from, 10 ) ) ) {
-				swapSlots( parseInt( from, 10 ), index );
-				return;
-			}
+			event.stopPropagation();
 			var id = event.dataTransfer.getData( 'text/x-sad-photo' );
 			if ( id && state.photos[ id ] ) {
-				placePhoto( index, id );
+				placeInItem( index, id );
 			}
 		} );
-
-		if ( photo ) {
-			enablePan( node, spread, index );
-			node.addEventListener( 'wheel', function ( event ) {
-				if ( state.selectedSlot !== index ) {
-					return;
-				}
-				event.preventDefault();
-				setZoom( spread.slots[ index ], spread.slots[ index ].zoom * Math.exp( -event.deltaY * 0.0015 ) );
-			}, { passive: false } );
-			// A placed photo that isn't selected can be dragged onto another space to swap them.
-			// The selected one is panned instead.
-			if ( state.selectedSlot !== index ) {
-				node.setAttribute( 'draggable', 'true' );
-				node.addEventListener( 'dragstart', function ( event ) {
-					event.dataTransfer.setData( 'text/x-sad-slot', String( index ) );
-					event.dataTransfer.effectAllowed = 'move';
-				} );
+		node.addEventListener( 'wheel', function ( event ) {
+			if ( state.selectedItem !== index || ! photo || item.fit !== 'fill' ) {
+				return;
 			}
+			event.preventDefault();
+			setZoom( item, item.zoom * Math.exp( -event.deltaY * 0.0015 ) );
+		}, { passive: false } );
+	}
+
+	/** Redraws one box and its selection frame after a drag step, without rebuilding the stage. */
+	function refreshItem( index ) {
+		var item = currentSpread().items[ index ];
+		var node = dom.itemNodes[ index ];
+		if ( ! item || ! node ) {
+			return;
+		}
+		var g = geo();
+		position( node, item, state.scale, g.b );
+		paint( node.firstChild, item, state.scale );
+		if ( state.selectedItem === index ) {
+			updateSelection();
 		}
 	}
 
-	/** Drag inside a photo to move it within its space. */
-	function enablePan( node, spread, index ) {
-		var start = null;
-		node.addEventListener( 'pointerdown', function ( event ) {
-			if ( state.selectedSlot !== index ) {
+	/* ---------- dragging ---------- */
+
+	/** Follows a pointer drag on `node`; `move(dxPx, dyPx, event)` runs on each step. */
+	function drag( event, node, move, done ) {
+		var startX = event.clientX;
+		var startY = event.clientY;
+		var started = false;
+		node.setPointerCapture( event.pointerId );
+		function onMove( e ) {
+			var dx = e.clientX - startX;
+			var dy = e.clientY - startY;
+			if ( ! started && Math.abs( dx ) + Math.abs( dy ) < 3 ) {
 				return;
 			}
-			var slot = spread.slots[ index ];
-			var photo = state.photos[ slot.photo ];
-			var w = node.clientWidth;
-			var h = node.clientHeight;
-			var scale = Math.max( w / photo.width, h / photo.height ) * slot.zoom;
-			start = {
-				x: event.clientX,
-				y: event.clientY,
-				slotX: slot.x,
-				slotY: slot.y,
-				overX: photo.width * scale - w,
-				overY: photo.height * scale - h,
-			};
-			node.setPointerCapture( event.pointerId );
-			node.classList.add( 'sad-slot--panning' );
-		} );
-		node.addEventListener( 'pointermove', function ( event ) {
-			if ( ! start ) {
-				return;
+			if ( ! started ) {
+				started = true;
+				checkpoint();
 			}
-			var slot = spread.slots[ index ];
-			if ( start.overX > 0.5 ) {
-				slot.x = Math.min( 1, Math.max( 0, start.slotX - ( event.clientX - start.x ) / start.overX ) );
-			}
-			if ( start.overY > 0.5 ) {
-				slot.y = Math.min( 1, Math.max( 0, start.slotY - ( event.clientY - start.y ) / start.overY ) );
-			}
-			node.style.backgroundPosition = slot.x * 100 + '% ' + slot.y * 100 + '%';
-		} );
-		function end() {
-			if ( start ) {
-				start = null;
-				node.classList.remove( 'sad-slot--panning' );
+			move( dx, dy, e );
+		}
+		function onEnd() {
+			node.removeEventListener( 'pointermove', onMove );
+			node.removeEventListener( 'pointerup', onEnd );
+			node.removeEventListener( 'pointercancel', onEnd );
+			showSnaps( null, null );
+			if ( started ) {
+				if ( done ) {
+					done();
+				}
 				scheduleSave();
 				renderStrip();
+				renderLowResNotice();
+				renderItemTools();
 			}
 		}
-		node.addEventListener( 'pointerup', end );
-		node.addEventListener( 'pointercancel', end );
+		node.addEventListener( 'pointermove', onMove );
+		node.addEventListener( 'pointerup', onEnd );
+		node.addEventListener( 'pointercancel', onEnd );
 	}
 
+	/** Guide lines a box edge or centre snaps to, in mm along one axis of the trimmed spread. */
+	function snapLines( axis, except ) {
+		var g = geo();
+		var len = axis === 'x' ? g.tw : g.th;
+		var lines = [ -g.b, 0, len / 2, len, len + g.b ];
+		if ( g.safe ) {
+			lines.push( g.safe, len - g.safe );
+		}
+		if ( axis === 'x' ) {
+			lines.push( len / 4, len * 3 / 4 );
+			if ( g.safe ) {
+				lines.push( len / 2 - g.safe, len / 2 + g.safe );
+			}
+		}
+		currentSpread().items.forEach( function ( other, i ) {
+			if ( i === except || other.rot ) {
+				return;
+			}
+			var m = itemMm( other );
+			var start = axis === 'x' ? m.x : m.y;
+			var size = axis === 'x' ? m.w : m.h;
+			lines.push( start, start + size / 2, start + size );
+		} );
+		return lines;
+	}
+
+	/** The nearest snap within reach for any of `values`: { d: mm to move, line }. */
+	function nearestSnap( values, lines ) {
+		var reach = 6 / state.scale;
+		var best = null;
+		values.forEach( function ( value ) {
+			lines.forEach( function ( line ) {
+				var d = line - value;
+				if ( Math.abs( d ) <= reach && ( ! best || Math.abs( d ) < Math.abs( best.d ) ) ) {
+					best = { d: d, line: line };
+				}
+			} );
+		} );
+		return best;
+	}
+
+	function showSnaps( x, y ) {
+		var g = geo();
+		dom.snapX.hidden = x === null;
+		dom.snapY.hidden = y === null;
+		if ( x !== null ) {
+			dom.snapX.style.left = ( g.b + x ) * state.scale + 'px';
+		}
+		if ( y !== null ) {
+			dom.snapY.style.top = ( g.b + y ) * state.scale + 'px';
+		}
+	}
+
+	function startMove( event, node, item, index ) {
+		var start = itemMm( item );
+		drag( event, node, function ( dx, dy, e ) {
+			var rect = { x: start.x + dx / state.scale, y: start.y + dy / state.scale, w: start.w, h: start.h };
+			var sx = null;
+			var sy = null;
+			if ( ! item.rot && ! e.altKey ) {
+				var snapX = nearestSnap( [ rect.x, rect.x + rect.w / 2, rect.x + rect.w ], snapLines( 'x', index ) );
+				var snapY = nearestSnap( [ rect.y, rect.y + rect.h / 2, rect.y + rect.h ], snapLines( 'y', index ) );
+				if ( snapX ) {
+					rect.x += snapX.d;
+					sx = snapX.line;
+				}
+				if ( snapY ) {
+					rect.y += snapY.d;
+					sy = snapY.line;
+				}
+			}
+			showSnaps( sx, sy );
+			setItemMm( item, rect );
+			currentSpread().layout = null;
+			refreshItem( index );
+		} );
+	}
+
+	/** Drags the photo inside its box (fill mode). */
+	function startPan( event, node, item ) {
+		var photo = state.photos[ item.photo ];
+		var m = itemMm( item );
+		var w = m.w * state.scale;
+		var h = m.h * state.scale;
+		var s = Math.max( w / photo.width, h / photo.height ) * item.zoom;
+		var overX = photo.width * s - w;
+		var overY = photo.height * s - h;
+		var startX = item.px;
+		var startY = item.py;
+		var a = item.rot * Math.PI / 180;
+		var index = state.selectedItem;
+		drag( event, node, function ( dx, dy ) {
+			// Pointer movement in the box's own (rotated) direction.
+			var lx = dx * Math.cos( a ) + dy * Math.sin( a );
+			var ly = -dx * Math.sin( a ) + dy * Math.cos( a );
+			if ( overX > 0.5 ) {
+				item.px = clamp( startX - lx / overX, 0, 1 );
+			}
+			if ( overY > 0.5 ) {
+				item.py = clamp( startY - ly / overY, 0, 1 );
+			}
+			refreshItem( index );
+		} );
+	}
+
+	/** Resizes from a handle; the opposite side stays put. Shift keeps the shape. */
+	function startResize( event, handle, index ) {
+		var item = currentSpread().items[ index ];
+		var start = itemMm( item );
+		var a = item.rot * Math.PI / 180;
+		var cos = Math.cos( a );
+		var sin = Math.sin( a );
+		var hx = handle.indexOf( 'e' ) !== -1 ? 1 : handle.indexOf( 'w' ) !== -1 ? -1 : 0;
+		var hy = handle.indexOf( 's' ) !== -1 ? 1 : handle.indexOf( 'n' ) !== -1 ? -1 : 0;
+		var cx = start.x + start.w / 2;
+		var cy = start.y + start.h / 2;
+		var target = event.currentTarget;
+		event.stopPropagation();
+		drag( event, target, function ( dx, dy, e ) {
+			var mx = dx / state.scale;
+			var my = dy / state.scale;
+			var lx = mx * cos + my * sin;
+			var ly = -mx * sin + my * cos;
+			var w = hx ? Math.max( MIN_BOX_MM, start.w + hx * lx ) : start.w;
+			var h = hy ? Math.max( MIN_BOX_MM, start.h + hy * ly ) : start.h;
+			if ( hx && hy && e.shiftKey ) {
+				var f = Math.max( w / start.w, h / start.h );
+				w = start.w * f;
+				h = start.h * f;
+			}
+			var sx = null;
+			var sy = null;
+			if ( ! item.rot && ! e.altKey ) {
+				// Snap the edges being dragged.
+				if ( hx ) {
+					var edgeX = hx > 0 ? start.x + w : start.x + start.w - w;
+					var snapX = nearestSnap( [ edgeX ], snapLines( 'x', index ) );
+					if ( snapX ) {
+						w = Math.max( MIN_BOX_MM, w + hx * snapX.d );
+						sx = snapX.line;
+					}
+				}
+				if ( hy ) {
+					var edgeY = hy > 0 ? start.y + h : start.y + start.h - h;
+					var snapY = nearestSnap( [ edgeY ], snapLines( 'y', index ) );
+					if ( snapY ) {
+						h = Math.max( MIN_BOX_MM, h + hy * snapY.d );
+						sy = snapY.line;
+					}
+				}
+			}
+			showSnaps( sx, sy );
+			// Move the centre so the opposite edge stays where it was.
+			var ox = hx * ( w - start.w ) / 2;
+			var oy = hy * ( h - start.h ) / 2;
+			var ncx = cx + ox * cos - oy * sin;
+			var ncy = cy + ox * sin + oy * cos;
+			setItemMm( item, { x: ncx - w / 2, y: ncy - h / 2, w: w, h: h } );
+			currentSpread().layout = null;
+			refreshItem( index );
+		} );
+	}
+
+	/** Turns the box around its centre. Snaps to straight angles; Shift turns in 15° steps. */
+	function startRotate( event, index ) {
+		var item = currentSpread().items[ index ];
+		var rect = dom.itemNodes[ index ].getBoundingClientRect();
+		var cx = rect.left + rect.width / 2;
+		var cy = rect.top + rect.height / 2;
+		var target = event.currentTarget;
+		event.stopPropagation();
+		var startRot = item.rot;
+		var startAngle = Math.atan2( event.clientY - cy, event.clientX - cx ) * 180 / Math.PI;
+		drag( event, target, function ( dx, dy, e ) {
+			var angle = startRot + Math.atan2( e.clientY - cy, e.clientX - cx ) * 180 / Math.PI - startAngle;
+			if ( e.shiftKey ) {
+				angle = Math.round( angle / 15 ) * 15;
+			} else {
+				var straight = Math.round( angle / 90 ) * 90;
+				if ( Math.abs( angle - straight ) < 4 ) {
+					angle = straight;
+				}
+			}
+			angle = ( ( angle + 540 ) % 360 ) - 180;
+			item.rot = Math.round( angle * 10 ) / 10;
+			if ( item.rot === -180 ) {
+				item.rot = 180;
+			}
+			refreshItem( index );
+		} );
+	}
+
+	/* ---------- stage ---------- */
+
 	function renderStage() {
-		var spread = state.design.spreads[ state.current ];
+		var spread = currentSpread();
+		var g = geo();
 		var wrapStyle = window.getComputedStyle( dom.stageWrap );
 		var inner = dom.stageWrap.clientWidth - parseFloat( wrapStyle.paddingLeft ) - parseFloat( wrapStyle.paddingRight );
-		var width = Math.min( inner, 1100 );
+		var width = Math.min( inner, 1200 );
 		if ( window.innerHeight > 300 ) {
-			width = Math.min( width, ( window.innerHeight - 200 - ( state.headerOffset || 0 ) ) * spreadAspect() );
+			width = Math.min( width, ( window.innerHeight - 220 - ( state.headerOffset || 0 ) ) * g.cw / g.ch );
 		}
 		width = Math.max( width, 240 );
-		drawSpread( dom.stage, spread, width, true );
+		state.scale = width / g.cw;
+
+		dom.stage.style.width = width + 'px';
+		dom.stage.style.height = g.ch * state.scale + 'px';
+		dom.canvas.innerHTML = '';
+		dom.itemNodes = drawItems( dom.canvas, spread, state.scale, g.b, true );
+		dom.canvas.classList.toggle( 'sad-canvas--armed', !! state.armedPhoto );
+		renderGuides();
+		renderSelection();
+		renderLowResNotice();
+
 		dom.spreadLabel.textContent = 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
 		dom.prev.disabled = state.current === 0;
 		dom.next.disabled = state.current === state.design.spreads.length - 1;
 	}
 
+	function box( node, x, y, w, h ) {
+		node.style.left = x * state.scale + 'px';
+		node.style.top = y * state.scale + 'px';
+		node.style.width = w * state.scale + 'px';
+		node.style.height = h * state.scale + 'px';
+		return node;
+	}
+
+	/** Bleed (shaded, red trim line), safe area (green) and the middle fold. */
+	function renderGuides() {
+		var g = geo();
+		dom.guides.innerHTML = '';
+		dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-trim' } ), g.b, g.b, g.tw, g.th ) );
+		if ( g.safe ) {
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.safe, g.b + g.safe, g.tw / 2 - 2 * g.safe, g.th - 2 * g.safe ) );
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.tw / 2 + g.safe, g.b + g.safe, g.tw / 2 - 2 * g.safe, g.th - 2 * g.safe ) );
+		}
+		dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-fold' } ), g.b + g.tw / 2, g.b, 0, g.th ) );
+		dom.snapX = el( 'div', { class: 'sad-snap sad-snap--x', hidden: true } );
+		dom.snapY = el( 'div', { class: 'sad-snap sad-snap--y', hidden: true } );
+		dom.guides.appendChild( dom.snapX );
+		dom.guides.appendChild( dom.snapY );
+	}
+
+	/** The selection frame with resize and rotate handles, size readout and quick buttons. */
+	function renderSelection() {
+		dom.overlay.innerHTML = '';
+		dom.frame = null;
+		var item = selectedItem();
+		dom.itemNodes.forEach( function ( node, i ) {
+			node.classList.toggle( 'sad-item--selected', i === state.selectedItem );
+			node.classList.toggle( 'sad-item--adjusting', i === state.selectedItem && state.adjusting );
+			node.classList.toggle( 'sad-item--swap', state.swapFrom !== null && i !== state.swapFrom );
+		} );
+		if ( ! item || isLocked() ) {
+			return;
+		}
+		var index = state.selectedItem;
+		dom.frame = el( 'div', { class: 'sad-frame' + ( state.adjusting ? ' sad-frame--adjusting' : '' ) } );
+		if ( ! state.adjusting ) {
+			HANDLES.forEach( function ( h ) {
+				var handle = el( 'span', { class: 'sad-handle sad-handle--' + h, 'aria-hidden': 'true' } );
+				handle.addEventListener( 'pointerdown', function ( event ) {
+					if ( event.button === 0 ) {
+						startResize( event, h, index );
+					}
+				} );
+				dom.frame.appendChild( handle );
+			} );
+			var rotate = el( 'span', { class: 'sad-rotate', title: 'Drag to rotate (hold Shift for 15° steps)', 'aria-hidden': 'true', text: '↻' } );
+			rotate.addEventListener( 'pointerdown', function ( event ) {
+				if ( event.button === 0 ) {
+					startRotate( event, index );
+				}
+			} );
+			dom.frame.appendChild( rotate );
+		}
+		dom.dims = el( 'span', { class: 'sad-dims' } );
+		dom.frame.appendChild( dom.dims );
+		dom.bar = el( 'div', { class: 'sad-float' }, quickButtons( item, index ) );
+		dom.overlay.appendChild( dom.frame );
+		dom.overlay.appendChild( dom.bar );
+		updateSelection();
+	}
+
+	/** Moves the selection frame and quick buttons to follow the selected box. */
+	function updateSelection() {
+		var item = selectedItem();
+		if ( ! item || ! dom.frame || ! dom.frame.parentNode ) {
+			return;
+		}
+		var g = geo();
+		var m = itemMm( item );
+		position( dom.frame, item, state.scale, g.b );
+		dom.dims.style.transform = item.rot ? 'translate(-50%, 6px) rotate(' + -item.rot + 'deg)' : '';
+		dom.dims.textContent = state.adjusting
+			? 'Drag to move the photo inside the box · scroll to zoom'
+			: Math.round( m.w ) + ' × ' + Math.round( m.h ) + ' mm' + ( item.rot ? ' · ' + Math.round( item.rot ) + '°' : '' );
+
+		// Quick buttons above the box (below it when the box is at the top).
+		var a = Math.abs( item.rot * Math.PI / 180 );
+		var bh = m.w * Math.abs( Math.sin( a ) ) + m.h * Math.abs( Math.cos( a ) );
+		var top = ( g.b + m.y + m.h / 2 - bh / 2 ) * state.scale;
+		var bottom = ( g.b + m.y + m.h / 2 + bh / 2 ) * state.scale;
+		var half = dom.bar.offsetWidth / 2;
+		dom.bar.style.left = clamp( ( g.b + m.x + m.w / 2 ) * state.scale, half - 20, dom.stage.clientWidth - half + 20 ) + 'px';
+		dom.bar.style.top = ( top > 52 ? top - 44 : Math.min( bottom + 44, dom.stage.clientHeight - 4 ) ) + 'px';
+	}
+
+	function iconButton( label, text, onclick, pressed ) {
+		return el( 'button', {
+			type: 'button',
+			class: 'sad-float__btn',
+			title: label,
+			'aria-label': label,
+			'aria-pressed': pressed === undefined ? null : ( pressed ? 'true' : 'false' ),
+			text: text,
+			onclick: function ( event ) {
+				event.stopPropagation();
+				onclick();
+			},
+			onpointerdown: function ( event ) {
+				event.stopPropagation();
+			},
+		} );
+	}
+
+	function quickButtons( item, index ) {
+		var photo = item.photo && state.photos[ item.photo ];
+		var buttons = [];
+		if ( photo && item.fit === 'fill' ) {
+			buttons.push( iconButton( 'Move the photo inside the box', '✥', function () {
+				state.adjusting = ! state.adjusting;
+				renderSelection();
+				renderItemTools();
+			}, state.adjusting ) );
+		}
+		if ( photo ) {
+			buttons.push( iconButton( 'Swap with another photo box', '⇄', function () {
+				state.swapFrom = index;
+				state.adjusting = false;
+				renderSelection();
+				toast( 'Now click the photo box to swap with.' );
+			} ) );
+		}
+		buttons.push( iconButton( 'Bring forward', '▲', function () {
+			restack( index, 1 );
+		} ) );
+		buttons.push( iconButton( 'Send backward', '▼', function () {
+			restack( index, -1 );
+		} ) );
+		buttons.push( iconButton( 'Duplicate', '⧉', function () {
+			duplicateItem( index );
+		} ) );
+		buttons.push( iconButton( 'Delete box', '🗑', function () {
+			deleteItem( index );
+		} ) );
+		return buttons;
+	}
+
+	function renderLowResNotice() {
+		var spread = currentSpread();
+		dom.lowres.hidden = ! spread.items.some( isLowRes );
+	}
+
 	var zoomSaveTimer;
 
-	/** Sets a placed photo's zoom (1 to 4) and updates the stage and slider without a full redraw. */
-	function setZoom( slot, value ) {
-		slot.zoom = Math.min( 4, Math.max( 1, value ) );
-		renderStage();
+	/** Sets a photo's zoom (1 to 4) without rebuilding the stage. */
+	function setZoom( item, value ) {
+		checkpoint( 'zoom' );
+		item.zoom = clamp( value, 1, 4 );
+		refreshItem( currentSpread().items.indexOf( item ) );
 		if ( dom.zoomInput ) {
-			dom.zoomInput.value = String( slot.zoom );
+			dom.zoomInput.value = String( item.zoom );
 		}
 		clearTimeout( zoomSaveTimer );
 		zoomSaveTimer = setTimeout( function () {
 			scheduleSave();
 			renderStrip();
+			renderLowResNotice();
 		}, 300 );
 	}
 
-	function renderSlotTools() {
+	function segmented( options, value, onchange ) {
+		return el( 'span', { class: 'sad-seg', role: 'group' }, options.map( function ( option ) {
+			return el( 'button', {
+				type: 'button',
+				class: 'sad-seg__btn',
+				'aria-pressed': option[ 0 ] === value ? 'true' : 'false',
+				text: option[ 1 ],
+				onclick: function () {
+					onchange( option[ 0 ] );
+				},
+			} );
+		} ) );
+	}
+
+	/** Settings for the selected box, under the stage. */
+	function renderItemTools() {
 		dom.slotTools.innerHTML = '';
 		dom.zoomInput = null;
-		var spread = state.design.spreads[ state.current ];
-		var slot = state.selectedSlot !== null ? spread.slots[ state.selectedSlot ] : null;
 		if ( isLocked() ) {
 			return;
 		}
 		if ( state.armedPhoto ) {
-			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Now tap a photo space to place the photo.' } ) );
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Now tap a photo box to put the photo in it, or tap an empty part of the spread to add it there.' } ) );
 			dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Cancel', onclick: function () {
 				state.armedPhoto = null;
 				renderAll();
 			} } ) );
 			return;
 		}
-		if ( ! slot || ! slot.photo ) {
-			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos from "Your photos" (or straight from your computer) onto a space, or tap a photo then tap a space. Click a placed photo to move or resize it.' } ) );
+		if ( state.swapFrom !== null ) {
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Click the photo box to swap with.' } ) );
+			dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Cancel', onclick: function () {
+				state.swapFrom = null;
+				renderSelection();
+				renderItemTools();
+			} } ) );
 			return;
 		}
-		var zoom = el( 'input', { type: 'range', min: '1', max: '4', step: '0.01', value: String( slot.zoom ), 'aria-label': 'Zoom' } );
-		dom.zoomInput = zoom;
-		zoom.addEventListener( 'input', function () {
-			setZoom( slot, parseFloat( zoom.value ) );
+		var item = selectedItem();
+		if ( ! item ) {
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos onto the spread to add them, or onto a box to fill it. Click a box to move it, resize it from the corners, or turn it with the round handle. Keep faces inside the green lines; anything past the red line is trimmed off.' } ) );
+			return;
+		}
+		var index = state.selectedItem;
+		var photo = item.photo && state.photos[ item.photo ];
+		if ( photo ) {
+			dom.slotTools.appendChild( segmented( [ [ 'fill', 'Fill box' ], [ 'fit', 'Show whole photo' ] ], item.fit, function ( fit ) {
+				setFit( item, fit );
+			} ) );
+		}
+		if ( photo && item.fit === 'fill' ) {
+			var zoom = el( 'input', { type: 'range', min: '1', max: '4', step: '0.01', value: String( item.zoom ), 'aria-label': 'Zoom' } );
+			dom.zoomInput = zoom;
+			zoom.addEventListener( 'input', function () {
+				setZoom( item, parseFloat( zoom.value ) );
+			} );
+			dom.slotTools.appendChild( el( 'span', { class: 'sad-zoom' }, [
+				el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom out', text: '−', onclick: function () {
+					setZoom( item, item.zoom / 1.15 );
+				} } ),
+				zoom,
+				el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom in', text: '+', onclick: function () {
+					setZoom( item, item.zoom * 1.15 );
+				} } ),
+			] ) );
+			dom.slotTools.appendChild( el( 'button', {
+				type: 'button',
+				class: 'sad-btn sad-btn--ghost',
+				'aria-pressed': state.adjusting ? 'true' : 'false',
+				text: state.adjusting ? 'Done moving photo' : 'Move photo in box',
+				onclick: function () {
+					state.adjusting = ! state.adjusting;
+					renderSelection();
+					renderItemTools();
+				},
+			} ) );
+		}
+		var rotation = el( 'input', { type: 'number', min: '-180', max: '180', step: '1', value: String( Math.round( item.rot ) ), class: 'sad-num', 'aria-label': 'Rotation in degrees' } );
+		rotation.addEventListener( 'change', function () {
+			var value = parseFloat( rotation.value );
+			if ( isNaN( value ) ) {
+				return;
+			}
+			checkpoint();
+			item.rot = ( ( value + 540 ) % 360 ) - 180;
+			changed();
 		} );
-		dom.slotTools.appendChild( el( 'span', { class: 'sad-zoom' }, [
-			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom out', text: '−', onclick: function () {
-				setZoom( slot, slot.zoom / 1.15 );
-			} } ),
-			zoom,
-			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom in', text: '+', onclick: function () {
-				setZoom( slot, slot.zoom * 1.15 );
-			} } ),
-		] ) );
-		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Reset', onclick: function () {
-			slot.zoom = 1;
-			slot.x = 0.5;
-			slot.y = 0.5;
-			scheduleSave();
-			renderAll();
+		dom.slotTools.appendChild( el( 'label', { class: 'sad-zoom' }, [ 'Rotate', rotation, '°' ] ) );
+		if ( photo ) {
+			dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Match photo shape', title: 'Reshape the box so the whole photo shows with no cropping', onclick: function () {
+				matchPhotoShape( item );
+			} } ) );
+			dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Remove photo', onclick: function () {
+				checkpoint();
+				item.photo = null;
+				state.adjusting = false;
+				changed();
+			} } ) );
+		}
+		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--danger', text: 'Delete box', onclick: function () {
+			deleteItem( index );
 		} } ) );
-		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Remove photo', onclick: function () {
-			spread.slots[ state.selectedSlot ] = emptySlot();
-			scheduleSave();
-			renderAll();
-		} } ) );
-		dom.slotTools.appendChild( el( 'span', { class: 'sad-help', text: 'Drag the photo to move it. Scroll or use + and − to make it bigger or smaller.' } ) );
+		var dpi = itemDpi( item );
+		if ( dpi ) {
+			dom.slotTools.appendChild( el( 'span', { class: 'sad-help' + ( dpi < state.album.minDpi ? ' sad-help--warn' : '' ), text: 'Print quality: about ' + dpi + ' dpi' + ( dpi < state.album.minDpi ? ' (may look soft)' : '' ) } ) );
+		}
+	}
+
+	/* ---------- panels ---------- */
+
+	function layoutIcon( slots ) {
+		var icon = el( 'span', { class: 'sad-layout__icon' } );
+		icon.style.aspectRatio = String( spreadAspect() );
+		slots.forEach( function ( rect ) {
+			var part = el( 'span', { class: 'sad-layout__box' } );
+			part.style.left = rect[ 0 ] * 100 + '%';
+			part.style.top = rect[ 1 ] * 100 + '%';
+			part.style.width = rect[ 2 ] * 100 + '%';
+			part.style.height = rect[ 3 ] * 100 + '%';
+			icon.appendChild( part );
+		} );
+		return icon;
 	}
 
 	function renderLayouts() {
@@ -822,38 +1514,36 @@
 			dom.layoutsSection.hidden = true;
 			return;
 		}
-		var spread = state.design.spreads[ state.current ];
+		var spread = currentSpread();
 		config.layouts.forEach( function ( layout ) {
-			var icon = el( 'span', { class: 'sad-layout__icon' } );
-			icon.style.aspectRatio = String( spreadAspect() );
-			layout.slots.forEach( function ( rect ) {
-				var box = el( 'span', { class: 'sad-layout__box' } );
-				box.style.left = rect[ 0 ] * 100 + '%';
-				box.style.top = rect[ 1 ] * 100 + '%';
-				box.style.width = rect[ 2 ] * 100 + '%';
-				box.style.height = rect[ 3 ] * 100 + '%';
-				icon.appendChild( box );
-			} );
 			dom.layouts.appendChild( el( 'button', {
 				type: 'button',
 				class: 'sad-layout' + ( spread.layout === layout.id ? ' sad-layout--active' : '' ),
-				title: layout.name,
+				title: layout.name + ' (' + layout.slots.length + ')',
 				'aria-label': layout.name,
 				'aria-pressed': spread.layout === layout.id ? 'true' : 'false',
 				onclick: function () {
-					if ( spread.layout !== layout.id ) {
-						setLayout( layout.id );
-					}
+					setLayout( layout.id );
 				},
-			}, [ icon ] ) );
+			}, [ layoutIcon( layout.slots ) ] ) );
 		} );
+	}
+
+	function drawThumb( container, spread, width ) {
+		var g = geo();
+		var scale = width / g.tw;
+		container.innerHTML = '';
+		container.style.width = width + 'px';
+		container.style.height = g.th * scale + 'px';
+		drawItems( container, spread, scale, 0, false );
+		container.appendChild( el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } ) );
 	}
 
 	function renderStrip() {
 		dom.strip.innerHTML = '';
 		state.design.spreads.forEach( function ( spread, index ) {
 			var mini = el( 'div', { class: 'sad-mini' } );
-			drawSpread( mini, spread, 120, false );
+			drawThumb( mini, spread, 120 );
 			dom.strip.appendChild( el( 'button', {
 				type: 'button',
 				class: 'sad-thumb' + ( index === state.current ? ' sad-thumb--active' : '' ),
@@ -874,25 +1564,27 @@
 
 	function renderTray() {
 		dom.tray.innerHTML = '';
-		var counts = usageCounts();
+		var used = usage();
 		dom.trayCount.textContent = state.photoOrder.length ? '(' + state.photoOrder.length + ')' : '';
 		if ( ! state.photoOrder.length ) {
 			dom.tray.appendChild( el( 'p', { class: 'sad-help', text: isLocked() ? 'No photos.' : 'Add your photos to start. JPEG or PNG, full size is best for printing.' } ) );
 		}
 		state.photoOrder.forEach( function ( id ) {
 			var photo = state.photos[ id ];
+			var where = used[ id ] ? 'Used on spread ' + used[ id ].join( ', ' ) : '';
 			var img = el( 'img', { src: photo.preview, alt: photo.name, loading: 'lazy', draggable: 'false' } );
 			var item = el( 'div', {
-				class: 'sad-photo' + ( state.armedPhoto === id ? ' sad-photo--armed' : '' ) + ( counts[ id ] ? ' sad-photo--used' : '' ) + ( state.selected[ id ] ? ' sad-photo--selected' : '' ),
+				class: 'sad-photo' + ( state.armedPhoto === id ? ' sad-photo--armed' : '' ) + ( used[ id ] ? ' sad-photo--used' : '' ) + ( state.selected[ id ] ? ' sad-photo--selected' : '' ),
 				draggable: isLocked() || state.selecting ? 'false' : 'true',
 				'aria-pressed': state.selecting ? ( state.selected[ id ] ? 'true' : 'false' ) : null,
 				tabindex: '0',
 				role: 'button',
-				'aria-label': photo.name + ( counts[ id ] ? ', used in album' : '' ),
-				title: photo.name,
+				'aria-label': photo.name + ( where ? ', ' + where.toLowerCase() : '' ),
+				title: photo.name + ( where ? '\n' + where : '\nNot used yet. Drag it onto the spread, or double-click to add it.' ),
 			}, [
 				img,
-				counts[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__used', text: '✓' } ) : null,
+				used[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__used', text: '✓' } ) : null,
+				used[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__where', text: 'Spread ' + used[ id ].join( ', ' ) } ) : null,
 				state.selecting ? el( 'span', { class: 'sad-photo__check', 'aria-hidden': 'true', text: state.selected[ id ] ? '✓' : '' } ) : null,
 			] );
 
@@ -912,13 +1604,18 @@
 						renderAutoFill();
 						return;
 					}
-					var spread = state.design.spreads[ state.current ];
-					if ( state.selectedSlot !== null && spread.slots[ state.selectedSlot ] && ! spread.slots[ state.selectedSlot ].photo ) {
-						placePhoto( state.selectedSlot, id );
+					var box = selectedItem();
+					if ( box && ! box.photo ) {
+						placeInItem( state.selectedItem, id );
 						return;
 					}
 					state.armedPhoto = state.armedPhoto === id ? null : id;
 					renderAll();
+				} );
+				item.addEventListener( 'dblclick', function () {
+					if ( ! state.selecting ) {
+						addItem( id );
+					}
 				} );
 				item.addEventListener( 'keydown', function ( event ) {
 					if ( event.key === 'Enter' || event.key === ' ' ) {
@@ -965,20 +1662,9 @@
 		config.templates.forEach( function ( template ) {
 			var icons = el( 'span', { class: 'sad-template__icons', 'aria-hidden': 'true' } );
 			template.layouts.slice( 0, 3 ).forEach( function ( id ) {
-				if ( ! layouts[ id ] ) {
-					return;
+				if ( layouts[ id ] ) {
+					icons.appendChild( layoutIcon( layouts[ id ].slots ) );
 				}
-				var icon = el( 'span', { class: 'sad-layout__icon' } );
-				icon.style.aspectRatio = String( spreadAspect() );
-				layouts[ id ].slots.forEach( function ( rect ) {
-					var box = el( 'span', { class: 'sad-layout__box' } );
-					box.style.left = rect[ 0 ] * 100 + '%';
-					box.style.top = rect[ 1 ] * 100 + '%';
-					box.style.width = rect[ 2 ] * 100 + '%';
-					box.style.height = rect[ 3 ] * 100 + '%';
-					icon.appendChild( box );
-				} );
-				icons.appendChild( icon );
 			} );
 			dom.templates.appendChild( el( 'button', {
 				type: 'button',
@@ -997,7 +1683,7 @@
 			? 'Add photos first.'
 			: picked
 				? 'Uses your ' + picked + ' selected photos, in order.'
-				: 'Uses all ' + state.photoOrder.length + ' photos, in order. To use fewer, tap "Select photos" below.';
+				: 'Uses all ' + state.photoOrder.length + ' photos, in order. To use fewer, tap "Select photos" in Your photos.';
 		dom.autoButton.disabled = ! state.photoOrder.length;
 	}
 
@@ -1021,20 +1707,120 @@
 		dom.banner.hidden = ! isLocked();
 		dom.status.hidden = isLocked();
 		dom.spreadTools.hidden = isLocked();
+		dom.editTools.hidden = isLocked();
 		dom.upload.hidden = isLocked();
 	}
 
 	function renderAll() {
 		renderHeader();
 		renderStage();
-		renderSlotTools();
+		renderItemTools();
 		renderLayouts();
 		renderStrip();
 		renderTray();
 		renderAutoFill();
+		renderUndo();
 	}
 
 	/* ---------- setup ---------- */
+
+	/** Where a pointer or drop lands on the stage, in mm from the top left of the trimmed spread. */
+	function stagePoint( event ) {
+		var rect = dom.stage.getBoundingClientRect();
+		var g = geo();
+		return { x: ( event.clientX - rect.left ) / state.scale - g.b, y: ( event.clientY - rect.top ) / state.scale - g.b };
+	}
+
+	function enableCanvas() {
+		// Clicking empty space deselects, or adds the photo picked in the tray.
+		dom.canvas.addEventListener( 'pointerdown', function ( event ) {
+			if ( event.target !== dom.canvas || isLocked() ) {
+				return;
+			}
+			if ( state.armedPhoto ) {
+				addItem( state.armedPhoto, stagePoint( event ) );
+				return;
+			}
+			if ( state.selectedItem !== null || state.swapFrom !== null ) {
+				state.selectedItem = null;
+				state.adjusting = false;
+				state.swapFrom = null;
+				renderSelection();
+				renderItemTools();
+			}
+		} );
+		dom.canvas.addEventListener( 'dragover', function ( event ) {
+			if ( ! isLocked() ) {
+				event.preventDefault();
+			}
+		} );
+		dom.canvas.addEventListener( 'drop', function ( event ) {
+			if ( hasFiles( event ) || isLocked() ) {
+				return;
+			}
+			event.preventDefault();
+			var id = event.dataTransfer.getData( 'text/x-sad-photo' );
+			if ( id && state.photos[ id ] ) {
+				addItem( id, stagePoint( event ) );
+			}
+		} );
+	}
+
+	function typing( event ) {
+		var tag = event.target && event.target.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ( event.target && event.target.isContentEditable );
+	}
+
+	function enableKeys() {
+		document.addEventListener( 'keydown', function ( event ) {
+			if ( ! state.album || isLocked() || typing( event ) ) {
+				return;
+			}
+			var mod = event.ctrlKey || event.metaKey;
+			var key = event.key.toLowerCase();
+			if ( mod && key === 'z' ) {
+				event.preventDefault();
+				if ( event.shiftKey ) {
+					redo();
+				} else {
+					undo();
+				}
+				return;
+			}
+			if ( mod && key === 'y' ) {
+				event.preventDefault();
+				redo();
+				return;
+			}
+			var item = selectedItem();
+			if ( ! item || ! root.contains( document.activeElement ) && document.activeElement !== document.body ) {
+				return;
+			}
+			if ( event.key === 'Escape' ) {
+				state.selectedItem = null;
+				state.adjusting = false;
+				state.swapFrom = null;
+				renderSelection();
+				renderItemTools();
+			} else if ( event.key === 'Delete' || event.key === 'Backspace' ) {
+				event.preventDefault();
+				deleteItem( state.selectedItem );
+			} else if ( /^Arrow/.test( event.key ) ) {
+				event.preventDefault();
+				var step = event.shiftKey ? 10 : 1;
+				var m = itemMm( item );
+				m.x += event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+				m.y += event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+				checkpoint( 'nudge' );
+				setItemMm( item, m );
+				currentSpread().layout = null;
+				refreshItem( state.selectedItem );
+				scheduleSave();
+				clearTimeout( zoomSaveTimer );
+				zoomSaveTimer = setTimeout( renderStrip, 300 );
+			}
+		} );
+	}
 
 	function build() {
 		root.innerHTML = '';
@@ -1052,6 +1838,15 @@
 			goTo( state.current + 1 );
 		} } );
 		dom.spreadLabel = el( 'span', { class: 'sad-spread-label' } );
+		dom.undo = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', text: '↶', onclick: undo } );
+		dom.redo = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', title: 'Redo (Ctrl+Y)', 'aria-label': 'Redo', text: '↷', onclick: redo } );
+		dom.editTools = el( 'span', { class: 'sad-edit-tools' }, [
+			dom.undo,
+			dom.redo,
+			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Add an empty photo box', text: '+ Photo box', onclick: function () {
+				addItem( null );
+			} } ),
+		] );
 		dom.spreadTools = el( 'span', { class: 'sad-spread-tools' }, [
 			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Move spread earlier', text: '← Move', onclick: function () {
 				moveSpread( -1 );
@@ -1062,11 +1857,24 @@
 			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--danger', text: 'Delete spread', onclick: deleteSpread } ),
 		] );
 
-		dom.stage = el( 'div', { class: 'sad-stage' } );
+		dom.canvas = el( 'div', { class: 'sad-canvas' } );
+		dom.guides = el( 'div', { class: 'sad-guides', 'aria-hidden': 'true' } );
+		dom.overlay = el( 'div', { class: 'sad-overlay' } );
+		dom.stage = el( 'div', { class: 'sad-stage' }, [ dom.canvas, dom.guides, dom.overlay ] );
 		dom.stageWrap = el( 'div', { class: 'sad-stage-wrap' }, [ dom.stage ] );
+		dom.itemNodes = [];
+		dom.lowres = el( 'div', { class: 'sad-lowres', hidden: true, text: '⚠ A photo on this spread is enlarged more than its resolution allows and may print soft. Make its box smaller, zoom out, or choose a larger photo.' } );
+		dom.legend = el( 'div', { class: 'sad-legend' }, [
+			el( 'span', { class: 'sad-legend__trim', text: 'Trim: anything past this is cut off' } ),
+			el( 'span', { class: 'sad-legend__safe', text: 'Safe area: keep faces and text inside' } ),
+		] );
 		dom.slotTools = el( 'div', { class: 'sad-slot-tools' } );
 		dom.layouts = el( 'div', { class: 'sad-layouts' } );
-		dom.layoutsSection = el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'Layout for this spread' } ), dom.layouts ] );
+		dom.layoutsSection = el( 'section', { class: 'sad-section' }, [
+			el( 'h3', { text: 'Layouts' } ),
+			el( 'p', { class: 'sad-help', text: 'Start this spread from a layout. Your photos move into the new boxes, and you can still move and resize everything.' } ),
+			dom.layouts,
+		] );
 		dom.strip = el( 'div', { class: 'sad-strip' } );
 
 		var fileInput = el( 'input', { type: 'file', accept: 'image/jpeg,image/png', multiple: true, class: 'sad-file' } );
@@ -1074,7 +1882,7 @@
 			uploadFiles( fileInput.files );
 			fileInput.value = '';
 		} );
-		dom.upload = el( 'label', { class: 'sad-btn sad-btn--primary sad-upload' }, [ 'Add photos', fileInput ] );
+		dom.upload = el( 'label', { class: 'sad-btn sad-btn--primary sad-upload' }, [ '+ Upload photos', fileInput ] );
 		dom.uploadStatus = el( 'span', { class: 'sad-help', 'aria-live': 'polite' } );
 		dom.trayCount = el( 'span', { class: 'sad-count' } );
 		dom.tray = el( 'div', { class: 'sad-tray' } );
@@ -1120,19 +1928,23 @@
 		// The photo tray sits beside the spread (pinned to the bottom on narrow screens) and stays in
 		// view while scrolling, so photos can always be dragged straight onto the spread.
 		root.appendChild( el( 'div', { class: 'sad-workspace' }, [
+			el( 'aside', { class: 'sad-side' }, [ traySection ] ),
 			el( 'div', { class: 'sad-main' }, [
-				el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
+				el( 'div', { class: 'sad-nav' }, [ dom.editTools, dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
 				dom.stageWrap,
+				dom.lowres,
+				dom.legend,
 				dom.slotTools,
 				el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'All spreads' } ), dom.strip ] ),
 				dom.layoutsSection,
 				dom.autoSection,
 			] ),
-			el( 'aside', { class: 'sad-side' }, [ traySection ] ),
 		] ) );
 		dom.dropOverlay = el( 'div', { class: 'sad-drop-overlay', hidden: true }, [ el( 'span', { text: 'Drop your photos to add them' } ) ] );
 		root.appendChild( dom.dropOverlay );
 		root.appendChild( dom.toasts );
+		enableCanvas();
+		enableKeys();
 		enableFileDrop();
 		measureStickyHeader();
 
@@ -1152,7 +1964,7 @@
 
 	/**
 	 * Photos dragged in from the computer can be dropped anywhere on the page. Dropped on a photo
-	 * space, the first one is placed there once it has uploaded.
+	 * box the first one fills it, and dropped on the spread it gets a new box there, once uploaded.
 	 */
 	function enableFileDrop() {
 		var depth = 0;
@@ -1189,8 +2001,14 @@
 			if ( isLocked() || ! event.dataTransfer.files.length ) {
 				return;
 			}
-			var slot = event.target.closest ? event.target.closest( '.sad-stage .sad-slot' ) : null;
-			var target = slot ? { spread: state.design.spreads[ state.current ], slot: parseInt( slot.getAttribute( 'data-index' ), 10 ) } : null;
+			var spread = currentSpread();
+			var node = event.target.closest ? event.target.closest( '.sad-stage .sad-item' ) : null;
+			var target = null;
+			if ( node ) {
+				target = { spread: spread, item: spread.items[ parseInt( node.getAttribute( 'data-index' ), 10 ) ] };
+			} else if ( dom.stage.contains( event.target ) ) {
+				target = { spread: spread, at: stagePoint( event ) };
+			}
 			uploadFiles( event.dataTransfer.files, target );
 		} );
 	}
@@ -1221,9 +2039,13 @@
 			state.photos[ photo.id ] = photo;
 			state.photoOrder.push( photo.id );
 		} );
-		state.current = Math.min( state.current, state.design.spreads.length - 1 );
-		state.selectedSlot = null;
+		state.current = clamp( state.current, 0, state.design.spreads.length - 1 );
+		state.selectedItem = null;
+		state.adjusting = false;
+		state.swapFrom = null;
 		state.armedPhoto = null;
+		state.history = [];
+		state.future = [];
 		renderAll();
 	}
 

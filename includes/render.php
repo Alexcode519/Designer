@@ -33,45 +33,15 @@ function sad_spread_geometry( $album_id ) {
 }
 
 /**
- * Where a slot lands on the canvas, in pixels. Slots touching a trim edge run out into the bleed.
- */
-function sad_slot_rect( $slot, $geo ) {
-	list( $x, $y, $w, $h ) = $slot;
-	$eps = 0.001;
-
-	$left   = $geo['bleed'] + $x * $geo['trim_w'];
-	$top    = $geo['bleed'] + $y * $geo['trim_h'];
-	$right  = $geo['bleed'] + ( $x + $w ) * $geo['trim_w'];
-	$bottom = $geo['bleed'] + ( $y + $h ) * $geo['trim_h'];
-
-	if ( $x <= $eps ) {
-		$left = 0;
-	}
-	if ( $y <= $eps ) {
-		$top = 0;
-	}
-	if ( $x + $w >= 1 - $eps ) {
-		$right = $geo['canvas_w'];
-	}
-	if ( $y + $h >= 1 - $eps ) {
-		$bottom = $geo['canvas_h'];
-	}
-
-	$left = (int) round( $left );
-	$top  = (int) round( $top );
-	return array( $left, $top, (int) round( $right ) - $left, (int) round( $bottom ) - $top );
-}
-
-/**
- * The part of the photo that fills a slot, matching the editor: the photo covers the slot,
+ * The part of the photo that fills a box in "fill" mode, matching the editor: the photo covers the box,
  * is enlarged by `zoom`, and `x`/`y` (0 to 1) choose which part of the overflow shows.
  *
  * @return array [ src_x, src_y, src_w, src_h ]
  */
-function sad_source_crop( $img_w, $img_h, $slot_w, $slot_h, $zoom, $pan_x, $pan_y ) {
-	$scale  = max( $slot_w / $img_w, $slot_h / $img_h ) * max( 1, $zoom );
-	$src_w  = $slot_w / $scale;
-	$src_h  = $slot_h / $scale;
+function sad_source_crop( $img_w, $img_h, $box_w, $box_h, $zoom, $pan_x, $pan_y ) {
+	$scale  = max( $box_w / $img_w, $box_h / $img_h ) * max( 1, $zoom );
+	$src_w  = $box_w / $scale;
+	$src_h  = $box_h / $scale;
 	$over_x = $img_w - $src_w;
 	$over_y = $img_h - $src_h;
 	return array( $over_x * $pan_x, $over_y * $pan_y, $src_w, $src_h );
@@ -120,12 +90,12 @@ function sad_render_spread_file( $album_id, $index ) {
 	$geo    = sad_spread_geometry( $album_id );
 	$photos = sad_get_photos( $album_id );
 	$spread = $design['spreads'][ $index ];
-	$slots  = sad_layout_slots( $spread['layout'] );
 
 	$largest = 0;
-	foreach ( $spread['slots'] as $slot ) {
-		if ( $slot['photo'] && isset( $photos[ $slot['photo'] ] ) ) {
-			$largest = max( $largest, $photos[ $slot['photo'] ]['width'] * $photos[ $slot['photo'] ]['height'] );
+	foreach ( $spread['items'] as $item ) {
+		if ( $item['photo'] && isset( $photos[ $item['photo'] ] ) ) {
+			$box     = $item['w'] * $geo['trim_w'] * $item['h'] * $geo['trim_h'] * ( $item['rot'] ? 3 : 0 );
+			$largest = max( $largest, $photos[ $item['photo'] ]['width'] * $photos[ $item['photo'] ]['height'] + $box );
 		}
 	}
 	if ( ! sad_memory_ok( $geo['canvas_w'] * $geo['canvas_h'] + $largest ) ) {
@@ -138,23 +108,20 @@ function sad_render_spread_file( $album_id, $index ) {
 
 	$canvas = imagecreatetruecolor( $geo['canvas_w'], $geo['canvas_h'] );
 	imagefill( $canvas, 0, 0, imagecolorallocate( $canvas, 255, 255, 255 ) );
+	imagealphablending( $canvas, true );
 
-	foreach ( $spread['slots'] as $i => $slot ) {
-		if ( ! $slot['photo'] || ! isset( $photos[ $slot['photo'] ], $slots[ $i ] ) ) {
+	// Boxes are drawn in order, so later ones sit on top.
+	foreach ( $spread['items'] as $item ) {
+		if ( ! $item['photo'] || ! isset( $photos[ $item['photo'] ] ) ) {
 			continue;
 		}
-		$photo = $photos[ $slot['photo'] ];
-		$path  = sad_original_path( $album_id, $photo );
-		$img   = sad_load_image( $path );
+		$photo = $photos[ $item['photo'] ];
+		$img   = sad_load_image( sad_original_path( $album_id, $photo ) );
 		if ( ! $img ) {
 			imagedestroy( $canvas );
 			return new WP_Error( 'sad_missing_photo', sprintf( 'Could not open photo "%s" on spread %d.', $photo['name'], $index + 1 ), array( 'status' => 500 ) );
 		}
-
-		list( $dx, $dy, $dw, $dh ) = sad_slot_rect( $slots[ $i ], $geo );
-		list( $sx, $sy, $sw, $sh ) = sad_source_crop( imagesx( $img ), imagesy( $img ), $dw, $dh, $slot['zoom'], $slot['x'], $slot['y'] );
-
-		imagecopyresampled( $canvas, $img, $dx, $dy, (int) round( $sx ), (int) round( $sy ), $dw, $dh, (int) round( $sw ), (int) round( $sh ) );
+		sad_draw_item( $canvas, $img, $item, $geo );
 		imagedestroy( $img );
 	}
 
@@ -169,6 +136,89 @@ function sad_render_spread_file( $album_id, $index ) {
 		return new WP_Error( 'sad_write_failed', 'Could not save the spread file.', array( 'status' => 500 ) );
 	}
 	return $path;
+}
+
+/**
+ * Draws one photo box onto the canvas: cropped to fill the box, or fitted inside it, then rotated
+ * around the box centre. Matches the editor's CSS (background-size/position, then rotate()).
+ */
+function sad_draw_item( $canvas, $img, $item, $geo ) {
+	$img_w = imagesx( $img );
+	$img_h = imagesy( $img );
+	$box_w = $item['w'] * $geo['trim_w'];
+	$box_h = $item['h'] * $geo['trim_h'];
+	$cx    = $geo['bleed'] + ( $item['x'] + $item['w'] / 2 ) * $geo['trim_w'];
+	$cy    = $geo['bleed'] + ( $item['y'] + $item['h'] / 2 ) * $geo['trim_h'];
+
+	if ( 'fit' === $item['fit'] ) {
+		$scale = min( $box_w / $img_w, $box_h / $img_h );
+		$dst   = array( ( $box_w - $img_w * $scale ) / 2, ( $box_h - $img_h * $scale ) / 2, $img_w * $scale, $img_h * $scale );
+		$src   = array( 0, 0, $img_w, $img_h );
+	} else {
+		$dst = array( 0, 0, $box_w, $box_h );
+		$src = sad_source_crop( $img_w, $img_h, $box_w, $box_h, $item['zoom'], $item['px'], $item['py'] );
+	}
+
+	if ( abs( $item['rot'] ) < 0.01 ) {
+		sad_copy_clipped( $canvas, $img, $cx - $box_w / 2 + $dst[0], $cy - $box_h / 2 + $dst[1], $dst[2], $dst[3], $src );
+		return;
+	}
+
+	// Rotated: draw the box on its own transparent layer, turn it, then lay it on the canvas.
+	$layer = imagecreatetruecolor( max( 1, (int) round( $box_w ) ), max( 1, (int) round( $box_h ) ) );
+	imagealphablending( $layer, false );
+	imagesavealpha( $layer, true );
+	imagefill( $layer, 0, 0, imagecolorallocatealpha( $layer, 255, 255, 255, 127 ) );
+	imagealphablending( $layer, true );
+	sad_copy_clipped( $layer, $img, $dst[0], $dst[1], $dst[2], $dst[3], $src );
+
+	// GD turns anticlockwise; the editor's rotation is clockwise.
+	$turned = imagerotate( $layer, -$item['rot'], imagecolorallocatealpha( $layer, 255, 255, 255, 127 ) );
+	imagedestroy( $layer );
+	if ( ! $turned ) {
+		return;
+	}
+	imagesavealpha( $turned, true );
+	$tw = imagesx( $turned );
+	$th = imagesy( $turned );
+	sad_copy_clipped( $canvas, $turned, $cx - $tw / 2, $cy - $th / 2, $tw, $th, array( 0, 0, $tw, $th ) );
+	imagedestroy( $turned );
+}
+
+/**
+ * imagecopyresampled() for a destination rectangle that may hang off the canvas: trims the part
+ * outside and takes the matching part of the source.
+ *
+ * @param array $src [ x, y, w, h ] in source pixels.
+ */
+function sad_copy_clipped( $dst_img, $src_img, $dx, $dy, $dw, $dh, $src ) {
+	list( $sx, $sy, $sw, $sh ) = $src;
+	if ( $dw <= 0 || $dh <= 0 || $sw <= 0 || $sh <= 0 ) {
+		return;
+	}
+	$left   = max( 0, $dx );
+	$top    = max( 0, $dy );
+	$right  = min( imagesx( $dst_img ), $dx + $dw );
+	$bottom = min( imagesy( $dst_img ), $dy + $dh );
+	if ( $right - $left < 0.5 || $bottom - $top < 0.5 ) {
+		return;
+	}
+	$kx = $sw / $dw;
+	$ky = $sh / $dh;
+	$l  = (int) round( $left );
+	$t  = (int) round( $top );
+	imagecopyresampled(
+		$dst_img,
+		$src_img,
+		$l,
+		$t,
+		(int) round( $sx + ( $left - $dx ) * $kx ),
+		(int) round( $sy + ( $top - $dy ) * $ky ),
+		(int) round( $right ) - $l,
+		(int) round( $bottom ) - $t,
+		max( 1, (int) round( ( $right - $left ) * $kx ) ),
+		max( 1, (int) round( ( $bottom - $top ) * $ky ) )
+	);
 }
 
 function sad_load_image( $path ) {

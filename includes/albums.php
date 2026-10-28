@@ -88,7 +88,13 @@ function sad_album_config( $album_id ) {
 }
 
 /**
- * The client's design: spreads, each with a layout and one entry per photo slot.
+ * The client's design: spreads, each holding photo boxes in stacking order (last on top).
+ *
+ * A box is { photo, x, y, w, h, rot, fit, zoom, px, py }. x, y, w and h are fractions of the
+ * trimmed spread (both pages side by side), so a box can run out into the bleed with values
+ * below 0 or above 1. rot is degrees clockwise around the box centre. With fit "fill" the photo
+ * covers the box, enlarged by zoom, and px/py (0 to 1) choose which part of the overflow shows;
+ * with "fit" the whole photo shows, centred.
  */
 function sad_get_design( $album_id ) {
 	$design = json_decode( (string) get_post_meta( $album_id, '_sad_design', true ), true );
@@ -96,11 +102,59 @@ function sad_get_design( $album_id ) {
 		$config  = sad_album_config( $album_id );
 		$spreads = array();
 		for ( $i = 0; $i < $config['min_spreads']; $i++ ) {
-			$spreads[] = array( 'layout' => 'two-full', 'slots' => array() );
+			$spreads[] = array( 'layout' => 'two-full', 'items' => sad_layout_items( $album_id, 'two-full' ) );
 		}
 		$design = array( 'spreads' => $spreads );
 	}
 	return sad_sanitize_design( $album_id, $design );
+}
+
+/**
+ * Bleed as a fraction of the trimmed spread width and height.
+ */
+function sad_bleed_fractions( $album_id ) {
+	$size  = sad_album_config( $album_id )['size'];
+	$bleed = (float) sad_get_settings()['bleed_mm'];
+	return array( $bleed / ( $size['width_mm'] * 2 ), $bleed / $size['height_mm'] );
+}
+
+function sad_new_item( $photo, $x, $y, $w, $h ) {
+	return array(
+		'photo' => $photo,
+		'x'     => $x,
+		'y'     => $y,
+		'w'     => $w,
+		'h'     => $h,
+		'rot'   => 0,
+		'fit'   => 'fill',
+		'zoom'  => 1,
+		'px'    => 0.5,
+		'py'    => 0.5,
+	);
+}
+
+/**
+ * Photo boxes for a layout. Boxes touching a trim edge run out into the bleed. Matches layoutItems() in editor.js.
+ */
+function sad_layout_items( $album_id, $layout_id, $photo_ids = array() ) {
+	list( $bx, $by ) = sad_bleed_fractions( $album_id );
+	$eps             = 0.001;
+	$items           = array();
+	foreach ( sad_layout_slots( $layout_id ) as $i => $slot ) {
+		list( $x, $y, $w, $h ) = $slot;
+		$x2 = $x + $w;
+		$y2 = $y + $h;
+		$x  = $x <= $eps ? -$bx : $x;
+		$y  = $y <= $eps ? -$by : $y;
+		$x2 = $x2 >= 1 - $eps ? 1 + $bx : $x2;
+		$y2 = $y2 >= 1 - $eps ? 1 + $by : $y2;
+		$items[] = sad_new_item( $photo_ids[ $i ] ?? null, $x, $y, $x2 - $x, $y2 - $y );
+	}
+	return $items;
+}
+
+function sad_clamp( $value, $min, $max ) {
+	return min( $max, max( $min, (float) $value ) );
 }
 
 function sad_sanitize_design( $album_id, $design ) {
@@ -113,20 +167,47 @@ function sad_sanitize_design( $album_id, $design ) {
 		if ( count( $spreads ) >= $config['max_spreads'] ) {
 			break;
 		}
-		$layout = isset( $spread['layout'] ) && isset( $layouts[ $spread['layout'] ] ) ? $spread['layout'] : 'two-full';
-		$slots  = array();
-		$count  = count( $layouts[ $layout ]['slots'] );
-		for ( $i = 0; $i < $count; $i++ ) {
-			$slot    = $spread['slots'][ $i ] ?? array();
-			$photo   = isset( $slot['photo'] ) && isset( $photos[ $slot['photo'] ] ) ? $slot['photo'] : null;
-			$slots[] = array(
+		$layout = isset( $spread['layout'] ) && is_string( $spread['layout'] ) && isset( $layouts[ $spread['layout'] ] ) ? $spread['layout'] : null;
+
+		if ( ! isset( $spread['items'] ) && isset( $spread['slots'] ) ) {
+			// Designs saved before free placement: one fixed space per layout slot.
+			$items = sad_layout_items( $album_id, $layout ? $layout : 'two-full' );
+			foreach ( $items as $i => $item ) {
+				$slot = $spread['slots'][ $i ] ?? array();
+				$items[ $i ]['photo'] = $slot['photo'] ?? null;
+				$items[ $i ]['zoom']  = $slot['zoom'] ?? 1;
+				$items[ $i ]['px']    = $slot['x'] ?? 0.5;
+				$items[ $i ]['py']    = $slot['y'] ?? 0.5;
+			}
+			$spread['items'] = $items;
+		}
+
+		$items = array();
+		foreach ( array_slice( (array) ( $spread['items'] ?? array() ), 0, 60 ) as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$photo = isset( $item['photo'] ) && is_string( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ? $item['photo'] : null;
+			$rot   = fmod( (float) ( $item['rot'] ?? 0 ), 360 );
+			if ( $rot > 180 ) {
+				$rot -= 360;
+			} elseif ( $rot <= -180 ) {
+				$rot += 360;
+			}
+			$items[] = array(
 				'photo' => $photo,
-				'zoom'  => min( 5, max( 1, (float) ( $slot['zoom'] ?? 1 ) ) ),
-				'x'     => min( 1, max( 0, (float) ( $slot['x'] ?? 0.5 ) ) ),
-				'y'     => min( 1, max( 0, (float) ( $slot['y'] ?? 0.5 ) ) ),
+				'x'     => sad_clamp( $item['x'] ?? 0, -1, 2 ),
+				'y'     => sad_clamp( $item['y'] ?? 0, -1, 2 ),
+				'w'     => sad_clamp( $item['w'] ?? 0.25, 0.005, 2 ),
+				'h'     => sad_clamp( $item['h'] ?? 0.25, 0.005, 2 ),
+				'rot'   => round( $rot, 2 ),
+				'fit'   => isset( $item['fit'] ) && 'fit' === $item['fit'] ? 'fit' : 'fill',
+				'zoom'  => sad_clamp( $item['zoom'] ?? 1, 1, 5 ),
+				'px'    => sad_clamp( $item['px'] ?? 0.5, 0, 1 ),
+				'py'    => sad_clamp( $item['py'] ?? 0.5, 0, 1 ),
 			);
 		}
-		$spreads[] = array( 'layout' => $layout, 'slots' => $slots );
+		$spreads[] = array( 'layout' => $layout, 'items' => $items );
 	}
 
 	return array( 'spreads' => $spreads );
@@ -149,9 +230,13 @@ function sad_design_problems( $album_id, $design ) {
 		$problems[] = sprintf( 'Your album needs at least %d spreads.', $config['min_spreads'] );
 	}
 	foreach ( $design['spreads'] as $n => $spread ) {
-		foreach ( $spread['slots'] as $slot ) {
-			if ( ! $slot['photo'] ) {
-				$problems[] = sprintf( 'Spread %d has an empty photo space.', $n + 1 );
+		if ( ! $spread['items'] ) {
+			$problems[] = sprintf( 'Spread %d is blank.', $n + 1 );
+			continue;
+		}
+		foreach ( $spread['items'] as $item ) {
+			if ( ! $item['photo'] ) {
+				$problems[] = sprintf( 'Spread %d has an empty photo box.', $n + 1 );
 				break;
 			}
 		}

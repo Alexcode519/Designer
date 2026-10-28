@@ -121,6 +121,8 @@ function sad_client_payload( $album_id ) {
 		'minSpreads' => $config['min_spreads'],
 		'maxSpreads' => $config['max_spreads'],
 		'minDpi'     => (int) $settings['min_dpi_warn'],
+		'bleedMm'    => (float) $settings['bleed_mm'],
+		'safeMm'     => (float) $settings['safe_mm'],
 		'photos'     => $photos,
 		'design'     => sad_get_design( $album_id ),
 	);

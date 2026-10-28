@@ -23,6 +23,7 @@ function sad_get_settings() {
 	$defaults = array(
 		'sizes'        => sad_default_sizes(),
 		'bleed_mm'     => 3,
+		'safe_mm'      => 10,
 		'dpi'          => 300,
 		'notify_email' => get_option( 'admin_email' ),
 		'min_dpi_warn' => 200,
@@ -108,6 +109,7 @@ function sad_render_settings_page() {
 			array(
 				'sizes'        => $sizes ? $sizes : sad_default_sizes(),
 				'bleed_mm'     => max( 0, (float) ( $_POST['sad_bleed_mm'] ?? 3 ) ),
+				'safe_mm'      => max( 0, (float) ( $_POST['sad_safe_mm'] ?? 10 ) ),
 				'dpi'          => min( 600, max( 150, (int) ( $_POST['sad_dpi'] ?? 300 ) ) ),
 				'notify_email' => sanitize_email( wp_unslash( $_POST['sad_notify_email'] ?? '' ) ),
 				'min_dpi_warn' => max( 72, (int) ( $_POST['sad_min_dpi_warn'] ?? 200 ) ),
