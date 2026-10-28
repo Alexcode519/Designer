@@ -71,7 +71,7 @@ function sad_handle_start() {
 		sad_start_redirect( array_merge( $keep, array( 'sad_error' => 'missing' ) ) );
 	}
 	$size_ids = wp_list_pluck( sad_get_sizes(), 'id' );
-	if ( ! in_array( $size, $size_ids, true ) || ! isset( sad_cover_materials()[ $cover ] ) ) {
+	if ( ! in_array( $size, $size_ids, true ) || ( sad_covers_enabled() && ! isset( sad_cover_materials()[ $cover ] ) ) ) {
 		sad_start_redirect( array_merge( $keep, array( 'sad_error' => 'missing' ) ) );
 	}
 	if ( ! sad_rate_limit_ok( 'start', SAD_START_LIMIT ) ) {
@@ -115,7 +115,9 @@ function sad_create_client_album( $names, $email, $size, $cover = '' ) {
 	update_post_meta( $album_id, '_sad_started_by', 'client' );
 	update_post_meta( $album_id, '_sad_updated_at', time() );
 	sad_album_token( $album_id );
-	sad_set_album_cover_type( $album_id, $cover );
+	if ( sad_covers_enabled() ) {
+		sad_set_album_cover_type( $album_id, $cover );
+	}
 
 	$to = $settings['notify_email'] ? $settings['notify_email'] : get_option( 'admin_email' );
 	wp_mail(
@@ -125,7 +127,7 @@ function sad_create_client_album( $names, $email, $size, $cover = '' ) {
 			"%s (%s) has started an album: %s.\n\nSee all albums:\n%s\n",
 			$names,
 			$email,
-			sad_get_size( $size )['name'] . ( isset( sad_cover_materials()[ $cover ] ) ? ', ' . sad_cover_materials()[ $cover ]['name'] . ' cover' : '' ),
+			sad_get_size( $size )['name'] . ( sad_covers_enabled() && isset( sad_cover_materials()[ $cover ] ) ? ', ' . sad_cover_materials()[ $cover ]['name'] . ' cover' : '' ),
 			admin_url( 'edit.php?post_type=sad_album' )
 		)
 	);
@@ -202,7 +204,7 @@ function sad_render_start_page() {
 	// phpcs:enable
 
 	$messages = array(
-		'missing' => 'Please fill in your names, a valid email address, an album size and a cover.',
+		'missing' => 'Please fill in your names, a valid email address, an album size' . ( sad_covers_enabled() ? ' and a cover' : '' ) . '.',
 		'code'    => 'That access code is not right. Please check the code we gave you.',
 		'busy'    => 'Too many albums were started from this connection. Please try again in an hour.',
 		'failed'  => 'Something went wrong creating your album. Please try again.',
@@ -224,7 +226,7 @@ function sad_render_start_page() {
 		<div class="sad-start__grid">
 			<form class="sad-card" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<h2 class="sad-title">Design your album</h2>
-				<p class="sad-help">Tell us who you are and choose your album size and cover. We will email you a private link so you can come back to your design at any time.</p>
+				<p class="sad-help">Tell us who you are and choose your album size<?php echo sad_covers_enabled() ? ' and cover' : ''; ?>. We will email you a private link so you can come back to your design at any time.</p>
 				<input type="hidden" name="action" value="sad_start">
 				<p class="sad-hp" aria-hidden="true"><label>Leave this empty <input type="text" name="sad_website" tabindex="-1" autocomplete="off"></label></p>
 				<p>
@@ -244,6 +246,7 @@ function sad_render_start_page() {
 						<?php endforeach; ?>
 					</select>
 				</p>
+				<?php if ( sad_covers_enabled() ) : ?>
 				<fieldset class="sad-covers">
 					<legend>Cover</legend>
 					<?php foreach ( sad_cover_materials() as $cover_id => $material ) : ?>
@@ -257,6 +260,7 @@ function sad_render_start_page() {
 						</label>
 					<?php endforeach; ?>
 				</fieldset>
+				<?php endif; ?>
 				<?php if ( '' !== $settings['start_code'] ) : ?>
 					<p>
 						<label for="sad_code">Access code</label>

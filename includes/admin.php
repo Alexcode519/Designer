@@ -85,7 +85,7 @@ function sad_render_notes_box( $post ) {
 		<p>
 			<label for="sad-note-spread">Add a note on</label>
 			<select id="sad-note-spread">
-				<option value="cover">Cover</option>
+				<?php if ( sad_covers_enabled() ) : ?><option value="cover">Cover</option><?php endif; ?>
 				<?php foreach ( $design['spreads'] as $n => $spread ) : ?>
 					<option value="<?php echo esc_attr( $spread['id'] ); ?>"><?php echo esc_html( sprintf( 'Spread %d', $n + 1 ) ); ?></option>
 				<?php endforeach; ?>
@@ -123,6 +123,7 @@ function sad_render_details_box( $post ) {
 				<p class="description">Add or change sizes under Client albums &gt; Settings.</p>
 			</td>
 		</tr>
+		<?php if ( sad_covers_enabled() ) : ?>
 		<tr>
 			<th><label for="sad_cover">Cover</label></th>
 			<td>
@@ -135,6 +136,7 @@ function sad_render_details_box( $post ) {
 				<p class="description">The client can change this in the editor. Add or change cover types under Client albums &gt; Settings.</p>
 			</td>
 		</tr>
+		<?php endif; ?>
 		<tr>
 			<th>Number of spreads</th>
 			<td>
@@ -169,7 +171,9 @@ function sad_render_status_box( $post ) {
 		<p>Approved <?php echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) get_post_meta( $post->ID, '_sad_approved_at', true ) ) ); ?></p>
 	<?php endif; ?>
 	<p><?php echo esc_html( sprintf( '%d spreads, %d photos uploaded', count( $design['spreads'] ), $photos ) ); ?></p>
+	<?php if ( sad_covers_enabled() ) : ?>
 	<p><strong>Cover:</strong> <?php echo esc_html( sad_cover_label( $design['cover'] ) ); ?><?php echo sad_cover_is_printed( $design['cover'] ) ? '' : ' <span class="description">(no print file; tell your printer this choice)</span>'; ?></p>
+	<?php endif; ?>
 	<?php $extras = sad_album_extras( $post->ID, $design ); ?>
 	<?php if ( $extras['lines'] ) : ?>
 		<p><strong>Extras:</strong>
@@ -233,7 +237,7 @@ function sad_save_album_meta( $post_id, $post ) {
 	if ( ! get_post_meta( $post_id, '_sad_updated_at', true ) ) {
 		update_post_meta( $post_id, '_sad_updated_at', time() );
 	}
-	if ( isset( $_POST['sad_cover'] ) && 'approved' !== sad_album_status( $post_id ) ) {
+	if ( isset( $_POST['sad_cover'] ) && sad_covers_enabled() && 'approved' !== sad_album_status( $post_id ) ) {
 		sad_set_album_cover_type( $post_id, sanitize_title( wp_unslash( $_POST['sad_cover'] ) ) );
 	}
 }
@@ -281,7 +285,7 @@ function sad_handle_unlock() {
 }
 
 function sad_album_columns( $columns ) {
-	return array(
+	$columns = array(
 		'cb'          => $columns['cb'],
 		'title'       => 'Album',
 		'sad_client'  => 'Client',
@@ -293,6 +297,10 @@ function sad_album_columns( $columns ) {
 		'sad_updated' => 'Last change',
 		'date'        => 'Started',
 	);
+	if ( ! sad_covers_enabled() ) {
+		unset( $columns['sad_cover'] );
+	}
+	return $columns;
 }
 
 function sad_album_sortable_columns( $columns ) {

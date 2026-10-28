@@ -33,6 +33,7 @@ function sad_get_settings() {
 		'min_spreads'  => 10,
 		'max_spreads'  => 30,
 		// Printer specs for the cover and page count.
+		'client_cover'        => 0,
 		'cover_wrap_mm'       => 0,
 		'spine_base_mm'       => 0,
 		'spine_per_spread_mm' => 0,
@@ -131,6 +132,7 @@ function sad_render_settings_page() {
 				'start_code'   => sanitize_text_field( wp_unslash( $_POST['sad_start_code'] ?? '' ) ),
 				'min_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_min_spreads'] ?? 10 ) ) ),
 				'max_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_max_spreads'] ?? 30 ) ) ),
+				'client_cover'        => empty( $_POST['sad_client_cover'] ) ? 0 : 1,
 				'cover_wrap_mm'       => max( 0, (float) ( $_POST['sad_cover_wrap_mm'] ?? 0 ) ),
 				'spine_base_mm'       => max( 0, (float) ( $_POST['sad_spine_base_mm'] ?? 0 ) ),
 				'spine_per_spread_mm' => max( 0, (float) ( $_POST['sad_spine_per_spread_mm'] ?? 0 ) ),
@@ -222,7 +224,16 @@ function sad_render_settings_page() {
 				</tr>
 			</table>
 
-			<h2>Printed cover (from your printer's spec sheet)</h2>
+			<h2>Cover</h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row">Clients design the cover</th>
+					<td>
+						<label><input type="checkbox" name="sad_client_cover" value="1" <?php checked( $settings['client_cover'] ); ?>> Let clients choose the cover type on the start form and design the cover in the editor</label>
+						<p class="description">Off: the cover is left out of the start form, the editor and the print files, and you design or order covers yourself.</p>
+					</td>
+				</tr>
+			</table>
 			<p>Printed photo covers are one sheet: back cover, spine and front cover, plus extra all round that wraps over the boards. Leave these at 0 to make the cover the same size as a spread.</p>
 			<table class="form-table" role="presentation">
 				<tr>

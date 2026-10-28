@@ -28,6 +28,7 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Leaves notes on any spread or the cover for you, and sees your notes and replies there. Spreads with open notes show a badge.
 - Turns the pages in **Preview book**, a full-screen flip-through of the cover and every spread. The first time they approve, the preview opens so they look through the whole album before approving at the end.
 - Sees the number of spreads and pages, the cover, and any extras with prices (extra spreads beyond those included, cover upgrades). Nothing is charged.
+- Works in a dark editor, so the photos stand out, with three views: **List** (every spread one under the other; the one being edited is live, click any other to edit it), **Grid** (the whole album small; drag spreads to reorder, duplicate or delete) and **Preview** (the album as it will print, without guides).
 - Everything saves automatically. Clicking **Approve for printing** locks the album.
 
 **For you:**
@@ -61,6 +62,8 @@ Under **Client albums > Settings**:
 - **Extras and prices**: currency, spreads included and the price per extra spread. Add an upgrade price to a cover type as a third part, e.g. `Leather | Black #1c1a19 | 800`. Prices at 0 are hidden.
 
 ## Cover types
+
+By default clients do not see the cover at all: it is left out of the start form, the editor and the print files, and you design or order covers yourself. To let clients choose and design the cover, tick **Clients design the cover** under Settings > Cover.
 
 Under **Client albums > Settings > Cover types**, one per line:
 

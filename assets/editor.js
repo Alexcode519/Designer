@@ -177,7 +177,16 @@
 	}
 
 	function isPrinted( cover ) {
-		return !! coverMaterial( cover ).printed;
+		return coverOn() && !! coverMaterial( cover ).printed;
+	}
+
+	/** Whether the client designs the cover (a setting); when off, the album starts at spread 1. */
+	function coverOn() {
+		return !! state.album.coverEnabled;
+	}
+
+	function firstIndex() {
+		return coverOn() ? -1 : 0;
 	}
 
 	function coverMaterial( cover ) {
@@ -401,7 +410,7 @@
 
 	function afterHistory() {
 		state.checkpointKey = null;
-		state.current = clamp( state.current, -1, state.design.spreads.length - 1 );
+		state.current = clamp( state.current, firstIndex(), state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;
@@ -982,20 +991,10 @@
 		changed();
 	}
 
-	function moveSpread( delta ) {
-		var to = state.current + delta;
-		if ( onCover() || to < 0 || to >= state.design.spreads.length ) {
-			return;
-		}
-		checkpoint();
-		var spreads = state.design.spreads;
-		spreads.splice( to, 0, spreads.splice( state.current, 1 )[ 0 ] );
-		state.current = to;
-		changed();
-	}
-
 	function goTo( index ) {
-		state.current = clamp( index, -1, state.design.spreads.length - 1 );
+		state.current = clamp( index, firstIndex(), state.design.spreads.length - 1 );
+		state.scrollToCurrent = ! state.keepScroll;
+		state.keepScroll = false;
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;
@@ -1672,15 +1671,59 @@
 
 	/* ---------- stage ---------- */
 
+	/** Space inside the main area, in px. */
+	function viewArea() {
+		var style = window.getComputedStyle( dom.stageWrap );
+		return {
+			w: dom.stageWrap.clientWidth - parseFloat( style.paddingLeft ) - parseFloat( style.paddingRight ),
+			h: dom.stageWrap.clientHeight - parseFloat( style.paddingTop ) - parseFloat( style.paddingBottom ),
+		};
+	}
+
+	/** The cover (when clients design it) and every spread, with their index (-1 for the cover). */
+	function allViews() {
+		var views = coverOn() ? [ { spread: state.design.cover, index: -1 } ] : [];
+		state.design.spreads.forEach( function ( spread, index ) {
+			views.push( { spread: spread, index: index } );
+		} );
+		return views;
+	}
+
+	function setView( view ) {
+		state.view = view;
+		state.selectedItem = null;
+		state.adjusting = false;
+		state.scrollToCurrent = view === 'list';
+		root.classList.remove( 'sad-app--view-list', 'sad-app--view-grid', 'sad-app--view-preview' );
+		root.classList.add( 'sad-app--view-' + view );
+		dom.stageWrap.scrollTop = 0;
+		renderAll();
+	}
+
 	function renderStage() {
+		state.view = state.view || 'list';
+		Object.keys( dom.viewButtons ).forEach( function ( key ) {
+			dom.viewButtons[ key ].setAttribute( 'aria-pressed', key === state.view ? 'true' : 'false' );
+		} );
+		var editing = state.view === 'list';
+		dom.prev.hidden = ! editing;
+		dom.next.hidden = ! editing;
+		dom.spreadLabel.hidden = ! editing;
+		if ( state.view === 'grid' ) {
+			renderGrid();
+			return;
+		}
+		if ( state.view === 'preview' ) {
+			renderPreviewList();
+			return;
+		}
 		var spread = currentSpread();
 		var g = geo();
-		var wrapStyle = window.getComputedStyle( dom.stageWrap );
-		var inner = dom.stageWrap.clientWidth - parseFloat( wrapStyle.paddingLeft ) - parseFloat( wrapStyle.paddingRight );
-		var width = Math.min( inner, 1600 );
+		var area = viewArea();
+		var width = Math.min( area.w, 1600 );
 		if ( isFullScreen() ) {
-			var innerH = dom.stageWrap.clientHeight - parseFloat( wrapStyle.paddingTop ) - parseFloat( wrapStyle.paddingBottom );
-			width = Math.min( width, innerH * g.cw / g.ch );
+			// Room above for the quick buttons and below for the spread's actions.
+			width = Math.min( width, ( area.h - 120 ) * g.cw / g.ch );
 		} else if ( window.innerHeight > 300 ) {
 			width = Math.min( width, ( window.innerHeight - 220 - ( state.headerOffset || 0 ) ) * g.cw / g.ch );
 		}
@@ -1704,9 +1747,218 @@
 		renderLowResNotice();
 
 		dom.spreadLabel.textContent = onCover() ? 'Cover' + ( g.spine ? ' · ' + g.spine + ' mm spine' : '' ) : 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
-		dom.prev.disabled = state.current === -1;
-		dom.spreadTools.hidden = isLocked() || onCover();
+		dom.prev.disabled = state.current === firstIndex();
 		dom.next.disabled = state.current === state.design.spreads.length - 1;
+		renderList();
+	}
+
+	/** A spread drawn small, trimmed, for the list, grid and preview. */
+	function spreadPicture( spread, width ) {
+		var mini = el( 'div', { class: 'sad-mini' } );
+		drawThumb( mini, spread, width );
+		return mini;
+	}
+
+	function viewName( index ) {
+		return index === -1 ? 'Cover' : 'Spread ' + ( index + 1 );
+	}
+
+	/**
+	 * List view: every spread one under the other at full size, like turning through the album.
+	 * The current spread is the live editor; click any other to edit it.
+	 */
+	function renderList() {
+		var top = dom.stageWrap.scrollTop;
+		dom.views.className = 'sad-list';
+		dom.views.innerHTML = '';
+		allViews().forEach( function ( view ) {
+			var current = view.index === state.current;
+			var entry = el( 'div', { class: 'sad-entry' + ( current ? ' sad-entry--current' : '' ) } );
+			if ( current ) {
+				entry.appendChild( dom.stage );
+			} else {
+				var g = geo( view.spread );
+				var picture = spreadPicture( view.spread, g.tw * state.scale );
+				picture.style.margin = g.b * state.scale + 'px';
+				entry.appendChild( el( 'button', {
+					type: 'button',
+					class: 'sad-entry__static',
+					'aria-label': 'Edit ' + viewName( view.index ).toLowerCase(),
+					onclick: function () {
+						state.keepScroll = true;
+						goTo( view.index );
+					},
+				}, [ picture ] ) );
+			}
+			entry.appendChild( el( 'div', { class: 'sad-entry__bar' }, [
+				el( 'span', { class: 'sad-entry__label', text: viewName( view.index ) } ),
+				noteBadge( view.spread === state.design.cover ? 'cover' : view.spread.id ),
+			].concat( current && ! isLocked() ? spreadActions( view.index ) : [] ) ) );
+			dom.views.appendChild( entry );
+		} );
+		dom.stageWrap.scrollTop = top;
+		if ( state.scrollToCurrent ) {
+			state.scrollToCurrent = false;
+			var entryTop = dom.stage.parentNode.offsetTop - dom.stageWrap.offsetTop;
+			dom.stageWrap.scrollTop = Math.max( 0, entryTop - 12 );
+		}
+	}
+
+	function actionButton( text, onclick, extra ) {
+		return el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--small' + ( extra ? ' ' + extra : '' ), text: text, onclick: onclick } );
+	}
+
+	/** Buttons under the spread being edited in list view. */
+	function spreadActions( index ) {
+		var buttons = [];
+		if ( index >= 0 ) {
+			buttons.push( actionButton( '+ Add spread', addSpread ) );
+			buttons.push( actionButton( 'Duplicate', function () {
+				duplicateSpread( index );
+			} ) );
+		}
+		if ( ! boundCover() ) {
+			buttons.push( actionButton( '+ Photo box', function () {
+				addItem( null );
+			} ) );
+			buttons.push( actionButton( '+ Text', addText ) );
+		}
+		if ( index >= 0 ) {
+			buttons.push( actionButton( 'Delete', deleteSpread, 'sad-btn--danger' ) );
+		}
+		return buttons;
+	}
+
+	function duplicateSpread( index ) {
+		if ( state.design.spreads.length >= state.album.maxSpreads ) {
+			toast( 'Your album can have up to ' + state.album.maxSpreads + ' spreads.' );
+			return;
+		}
+		var copy = JSON.parse( JSON.stringify( state.design.spreads[ index ] ) );
+		copy.id = newSpreadId();
+		var coverBefore = geo( state.design.cover );
+		checkpoint();
+		state.design.spreads.splice( index + 1, 0, copy );
+		keepCoverInPlace( coverBefore );
+		state.current = index + 1;
+		state.selectedItem = null;
+		state.scrollToCurrent = true;
+		changed();
+	}
+
+	/** Moves a spread to a new position (grid drag and drop). */
+	function moveSpreadTo( from, to ) {
+		var spreads = state.design.spreads;
+		if ( from === to || from < 0 || to < 0 || from >= spreads.length || to >= spreads.length ) {
+			return;
+		}
+		checkpoint();
+		spreads.splice( to, 0, spreads.splice( from, 1 )[ 0 ] );
+		state.current = to;
+		changed();
+	}
+
+	/** Grid view: every spread small, to see the whole album, reorder by dragging, and jump to one. */
+	function renderGrid() {
+		var area = viewArea();
+		var cols = area.w >= 1100 ? 4 : area.w >= 720 ? 3 : area.w >= 420 ? 2 : 1;
+		var gap = 28;
+		var tileW = Math.floor( ( area.w - gap * ( cols - 1 ) ) / cols );
+		var dragFrom = null;
+		dom.views.className = 'sad-grid';
+		dom.views.style.gridTemplateColumns = 'repeat(' + cols + ', ' + tileW + 'px)';
+		dom.views.innerHTML = '';
+		allViews().forEach( function ( view ) {
+			var g = geo( view.spread );
+			var isSpread = view.index >= 0;
+			var tile = el( 'div', {
+				class: 'sad-tile' + ( view.index === state.current ? ' sad-tile--current' : '' ),
+				draggable: isSpread && ! isLocked() ? 'true' : 'false',
+			} );
+			tile.appendChild( el( 'button', {
+				type: 'button',
+				class: 'sad-tile__picture',
+				title: isLocked() ? '' : 'Click to edit' + ( isSpread ? ', drag to move' : '' ),
+				onclick: function () {
+					state.current = view.index;
+					setView( 'list' );
+				},
+			}, [ spreadPicture( view.spread, Math.min( tileW, tileW * 0.62 * g.tw / g.th ) ) ] ) );
+			tile.appendChild( el( 'div', { class: 'sad-entry__bar' }, [
+				el( 'span', { class: 'sad-entry__label', text: view.index === -1 ? 'Cover' : String( view.index + 1 ) } ),
+				noteBadge( isSpread ? view.spread.id : 'cover' ),
+			].concat( isSpread && ! isLocked() ? [
+				actionButton( 'Duplicate', function () {
+					duplicateSpread( view.index );
+				} ),
+				actionButton( 'Delete', function () {
+					state.current = view.index;
+					deleteSpread();
+				}, 'sad-btn--danger' ),
+			] : [] ) ) );
+			if ( isSpread && ! isLocked() ) {
+				tile.addEventListener( 'dragstart', function ( event ) {
+					dragFrom = view.index;
+					event.dataTransfer.effectAllowed = 'move';
+					event.dataTransfer.setData( 'text/x-sad-spread', String( view.index ) );
+					tile.classList.add( 'sad-tile--dragging' );
+				} );
+				tile.addEventListener( 'dragend', function () {
+					tile.classList.remove( 'sad-tile--dragging' );
+				} );
+				tile.addEventListener( 'dragover', function ( event ) {
+					if ( dragFrom !== null ) {
+						event.preventDefault();
+						tile.classList.add( 'sad-tile--over' );
+					}
+				} );
+				tile.addEventListener( 'dragleave', function () {
+					tile.classList.remove( 'sad-tile--over' );
+				} );
+				tile.addEventListener( 'drop', function ( event ) {
+					event.preventDefault();
+					event.stopPropagation();
+					tile.classList.remove( 'sad-tile--over' );
+					var from = dragFrom;
+					dragFrom = null;
+					if ( from !== null ) {
+						moveSpreadTo( from, view.index );
+					}
+				} );
+			}
+			dom.views.appendChild( tile );
+		} );
+		if ( ! isLocked() && state.design.spreads.length < state.album.maxSpreads ) {
+			dom.views.appendChild( el( 'button', { type: 'button', class: 'sad-tile sad-tile--add', text: '+ Add spread', onclick: function () {
+				state.current = state.design.spreads.length - 1;
+				addSpread();
+			} } ) );
+		}
+	}
+
+	/** Preview view: the album as it will print, trimmed, with no guides, one spread under another. */
+	function renderPreviewList() {
+		var area = viewArea();
+		var g = spreadGeo();
+		var width = Math.min( area.w, 1200 );
+		if ( isFullScreen() ) {
+			width = Math.min( width, ( area.h - 60 ) * g.tw / g.th );
+		}
+		dom.views.className = 'sad-list sad-list--preview';
+		dom.views.innerHTML = '';
+		dom.views.appendChild( el( 'div', { class: 'sad-preview-intro' }, [
+			el( 'span', { class: 'sad-help', text: 'This is how your album will print, trimmed, without the guides.' } ),
+			actionButton( 'Turn the pages like a book', function () {
+				openPreview( false );
+			} ),
+		] ) );
+		allViews().forEach( function ( view ) {
+			var vg = geo( view.spread );
+			dom.views.appendChild( el( 'div', { class: 'sad-entry' }, [
+				el( 'div', { class: 'sad-entry__print' }, [ spreadPicture( view.spread, width * vg.tw / g.tw ) ] ),
+				el( 'div', { class: 'sad-entry__bar' }, [ el( 'span', { class: 'sad-entry__label', text: viewName( view.index ) } ) ] ),
+			] ) );
+		} );
 	}
 
 	/**
@@ -2323,7 +2575,7 @@
 			lines.push( [ extra + ' extra spread' + ( extra === 1 ? '' : 's' ) + ' × ' + money( pricing.extraSpreadPrice ), extra * pricing.extraSpreadPrice ] );
 		}
 		var material = coverMaterial( state.design.cover );
-		if ( material.price > 0 ) {
+		if ( coverOn() && material.price > 0 ) {
 			lines.push( [ material.name + ' cover', material.price ] );
 		}
 		return lines;
@@ -2336,7 +2588,7 @@
 		var colour = coverMaterial( cover ).colours[ cover.colour ];
 		dom.summary.innerHTML = '';
 		dom.summary.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Your album' } ) );
-		dom.summary.appendChild( el( 'p', { class: 'sad-help', text: count + ' spreads (' + count * 2 + ' pages) · ' + coverMaterial( cover ).name + ( colour ? ', ' + colour.name : '' ) + ' cover' } ) );
+		dom.summary.appendChild( el( 'p', { class: 'sad-help', text: count + ' spreads (' + count * 2 + ' pages)' + ( coverOn() ? ' · ' + coverMaterial( cover ).name + ( colour ? ', ' + colour.name : '' ) + ' cover' : '' ) } ) );
 		var step = stepAdvice( count );
 		if ( step ) {
 			dom.summary.appendChild( el( 'p', { class: 'sad-help sad-help--warn', text: step } ) );
@@ -2360,11 +2612,12 @@
 
 	/** The views in the preview: the cover, then each spread. */
 	function previewViews() {
-		return [ state.design.cover ].concat( state.design.spreads );
+		return ( coverOn() ? [ state.design.cover ] : [] ).concat( state.design.spreads );
 	}
 
 	function previewLabel( index ) {
-		return index === 0 ? 'Cover' : 'Spread ' + index + ' of ' + state.design.spreads.length;
+		var n = coverOn() ? index : index + 1;
+		return n === 0 ? 'Cover' : 'Spread ' + n + ' of ' + state.design.spreads.length;
 	}
 
 	/** One page (left or right half) of a spread, drawn at the book's size. */
@@ -2447,7 +2700,7 @@
 			var dest = views[ to ];
 			var size = bookSize( from );
 			var reduce = window.matchMedia && window.matchMedia( '(prefers-reduced-motion: reduce)' ).matches;
-			if ( reduce || current === 0 || to === 0 ) {
+			if ( reduce || from === state.design.cover || dest === state.design.cover ) {
 				// The cover is a different size from the spreads: fade instead of turning.
 				book.classList.add( 'sad-book--fade' );
 				setTimeout( function () {
@@ -2570,16 +2823,18 @@
 
 	function renderStrip() {
 		dom.strip.innerHTML = '';
-		var coverMini = el( 'div', { class: 'sad-mini' } );
-		drawThumb( coverMini, state.design.cover, 120 );
-		dom.strip.appendChild( el( 'button', {
-			type: 'button',
-			class: 'sad-thumb sad-thumb--cover' + ( onCover() ? ' sad-thumb--active' : '' ),
-			'aria-label': 'Go to the cover',
-			onclick: function () {
-				goTo( -1 );
-			},
-		}, [ coverMini, el( 'span', { class: 'sad-thumb__num sad-thumb__pages' }, [ el( 'span', { text: 'Back' } ), el( 'span', { text: 'Cover' } ), el( 'span', { text: 'Front' } ) ] ), noteBadge( 'cover' ) ] ) );
+		if ( coverOn() ) {
+			var coverMini = el( 'div', { class: 'sad-mini' } );
+			drawThumb( coverMini, state.design.cover, 120 );
+			dom.strip.appendChild( el( 'button', {
+				type: 'button',
+				class: 'sad-thumb sad-thumb--cover' + ( onCover() ? ' sad-thumb--active' : '' ),
+				'aria-label': 'Go to the cover',
+				onclick: function () {
+					goTo( -1 );
+				},
+			}, [ coverMini, el( 'span', { class: 'sad-thumb__num sad-thumb__pages' }, [ el( 'span', { text: 'Back' } ), el( 'span', { text: 'Cover' } ), el( 'span', { text: 'Front' } ) ] ), noteBadge( 'cover' ) ] ) );
+		}
 		state.design.spreads.forEach( function ( spread, index ) {
 			var mini = el( 'div', { class: 'sad-mini' } );
 			drawThumb( mini, spread, 120 );
@@ -2926,22 +3181,22 @@
 			} } ),
 			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Add text to this page', text: '+ Text', onclick: addText } ),
 		] );
-		dom.spreadTools = el( 'span', { class: 'sad-spread-tools' }, [
-			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Move spread earlier', text: '← Move', onclick: function () {
-				moveSpread( -1 );
-			} } ),
-			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Move spread later', text: 'Move →', onclick: function () {
-				moveSpread( 1 );
-			} } ),
-			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--danger', text: 'Delete spread', onclick: deleteSpread } ),
-		] );
 
 		dom.canvas = el( 'div', { class: 'sad-canvas' } );
 		dom.guides = el( 'div', { class: 'sad-guides', 'aria-hidden': 'true' } );
 		dom.overlay = el( 'div', { class: 'sad-overlay' } );
 		dom.pageLabels = el( 'div', { class: 'sad-page-labels', 'aria-hidden': 'true', hidden: true }, [ el( 'span', { text: 'Back cover' } ), el( 'span', { text: 'Front cover' } ) ] );
 		dom.stage = el( 'div', { class: 'sad-stage' }, [ dom.canvas, dom.guides, dom.overlay, dom.pageLabels ] );
-		dom.stageWrap = el( 'div', { class: 'sad-stage-wrap' }, [ dom.stage ] );
+		dom.views = el( 'div', { class: 'sad-list' } );
+		dom.stageWrap = el( 'div', { class: 'sad-stage-wrap' }, [ dom.views ] );
+		dom.viewButtons = {};
+		var viewBar = el( 'div', { class: 'sad-views', role: 'group', 'aria-label': 'View' } );
+		[ [ 'list', 'List' ], [ 'grid', 'Grid' ], [ 'preview', 'Preview' ] ].forEach( function ( view ) {
+			dom.viewButtons[ view[ 0 ] ] = el( 'button', { type: 'button', class: 'sad-views__btn sad-views__btn--' + view[ 0 ], text: view[ 1 ], onclick: function () {
+				setView( view[ 0 ] );
+			} } );
+			viewBar.appendChild( dom.viewButtons[ view[ 0 ] ] );
+		} );
 		dom.itemNodes = [];
 		dom.lowres = el( 'div', { class: 'sad-lowres', hidden: true, text: '⚠ A photo on this spread is enlarged more than its resolution allows and may print soft. Make its box smaller, zoom out, or choose a larger photo.' } );
 		dom.legend = el( 'div', { class: 'sad-legend' }, [
@@ -3036,13 +3291,14 @@
 		root.appendChild( el( 'div', { class: 'sad-workspace' }, [
 			el( 'aside', { class: 'sad-side' }, [ tabBar, traySection, dom.layoutsSection, dom.autoSection ] ),
 			el( 'div', { class: 'sad-main' }, [
-				el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
+				el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, viewBar ] ),
 				dom.stageWrap,
 				el( 'section', { class: 'sad-section sad-strip-section' }, [ dom.strip ] ),
 			] ),
 			el( 'aside', { class: 'sad-tools' }, [ dom.lowres, dom.slotTools, dom.notes, dom.summary, dom.legend ] ),
 		] ) );
 		setTab( 'photos' );
+		root.classList.add( 'sad-app--view-list', 'sad-app--dark' );
 		dom.dropOverlay = el( 'div', { class: 'sad-drop-overlay', hidden: true }, [ el( 'span', { text: 'Drop your photos to add them' } ) ] );
 		root.appendChild( dom.dropOverlay );
 		root.appendChild( dom.toasts );
@@ -3149,14 +3405,14 @@
 			state.photos[ photo.id ] = photo;
 			state.photoOrder.push( photo.id );
 		} );
-		state.current = clamp( state.current, -1, state.design.spreads.length - 1 );
+		state.current = clamp( state.current, firstIndex(), state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;
 		state.armedPhoto = null;
 		state.history = [];
 		state.future = [];
-		if ( ! isLocked() && fitCoverToSpecs() ) {
+		if ( ! isLocked() && coverOn() && fitCoverToSpecs() ) {
 			scheduleSave();
 		}
 		renderAll();

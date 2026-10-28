@@ -335,7 +335,7 @@ function sad_album_extras( $album_id, $design = null ) {
 			'amount' => $extra * (float) $settings['extra_spread_price'],
 		);
 	}
-	$material = sad_cover_materials()[ $design['cover']['type'] ] ?? null;
+	$material = sad_covers_enabled() ? ( sad_cover_materials()[ $design['cover']['type'] ] ?? null ) : null;
 	if ( $material && $material['price'] > 0 ) {
 		$lines[] = array( 'label' => $material['name'] . ' cover', 'amount' => (float) $material['price'] );
 	}
@@ -378,10 +378,10 @@ function sad_approve_album( $album_id ) {
 		$to,
 		sprintf( 'Album approved: %s', sad_album_title( $album_id ) ),
 		sprintf(
-			"%s has approved their album design \"%s\".\n\nCover: %s\nSpreads: %d\n%s\nOpen it to download the print files:\n%s\n",
+			"%s has approved their album design \"%s\".\n\n%sSpreads: %d\n%s\nOpen it to download the print files:\n%s\n",
 			$client ? $client : 'Your client',
 			sad_album_title( $album_id ),
-			sad_cover_label( sad_get_design( $album_id )['cover'] ),
+			sad_covers_enabled() ? 'Cover: ' . sad_cover_label( sad_get_design( $album_id )['cover'] ) . "\n" : '',
 			count( sad_get_design( $album_id )['spreads'] ),
 			sad_extras_text( $album_id ) ? "\nExtras chosen:\n" . sad_extras_text( $album_id ) : '',
 			$edit

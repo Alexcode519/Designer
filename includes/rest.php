@@ -169,6 +169,7 @@ function sad_client_payload( $album_id ) {
 		'bleedMm'    => (float) $settings['bleed_mm'],
 		'safeMm'     => (float) $settings['safe_mm'],
 		'covers'     => sad_cover_materials(),
+		'coverEnabled' => sad_covers_enabled(),
 		'fonts'      => sad_fonts_for_client(),
 		'printer'    => array(
 			'coverWrapMm'      => (float) $settings['cover_wrap_mm'],

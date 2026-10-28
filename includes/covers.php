@@ -107,7 +107,18 @@ function sad_sanitize_cover( $album_id, $cover ) {
 	);
 }
 
+/**
+ * Whether clients choose and design the cover. When off, the cover is left out of the start form,
+ * the editor and the print files, and the studio handles covers.
+ */
+function sad_covers_enabled() {
+	return ! empty( sad_get_settings()['client_cover'] );
+}
+
 function sad_cover_is_printed( $cover ) {
+	if ( ! sad_covers_enabled() ) {
+		return false;
+	}
 	$materials = sad_cover_materials();
 	return ! empty( $materials[ $cover['type'] ]['printed'] );
 }
