@@ -52,6 +52,18 @@ function sad_render_details_box( $post ) {
 			</td>
 		</tr>
 		<tr>
+			<th><label for="sad_cover">Cover</label></th>
+			<td>
+				<select id="sad_cover" name="sad_cover">
+					<?php $cover = sad_get_design( $post->ID )['cover']; ?>
+					<?php foreach ( sad_cover_materials() as $cover_id => $material ) : ?>
+						<option value="<?php echo esc_attr( $cover_id ); ?>" <?php selected( $cover['type'], $cover_id ); ?>><?php echo esc_html( $material['name'] ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<p class="description">The client can change this in the editor. Add or change cover types under Client albums &gt; Settings.</p>
+			</td>
+		</tr>
+		<tr>
 			<th>Number of spreads</th>
 			<td>
 				<label>Minimum <input name="sad_min_spreads" type="number" min="1" max="100" class="small-text" value="<?php echo esc_attr( $config['min_spreads'] ); ?>"></label>
@@ -130,6 +142,9 @@ function sad_save_album_meta( $post_id, $post ) {
 	update_post_meta( $post_id, '_sad_max_spreads', $max );
 
 	sad_album_token( $post_id );
+	if ( isset( $_POST['sad_cover'] ) && 'approved' !== sad_album_status( $post_id ) ) {
+		sad_set_album_cover_type( $post_id, sanitize_title( wp_unslash( $_POST['sad_cover'] ) ) );
+	}
 }
 
 function sad_admin_assets( $hook ) {

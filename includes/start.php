@@ -55,11 +55,13 @@ function sad_handle_start() {
 	$names = sanitize_text_field( wp_unslash( $_POST['sad_names'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification
 	$email = sanitize_email( wp_unslash( $_POST['sad_email'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification
 	$size  = sanitize_title( wp_unslash( $_POST['sad_size'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification
+	$cover = sanitize_title( wp_unslash( $_POST['sad_cover'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification
 	$code  = trim( sanitize_text_field( wp_unslash( $_POST['sad_code'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 	$keep  = array(
 		'sad_names' => rawurlencode( $names ),
 		'sad_email' => rawurlencode( $email ),
 		'sad_size'  => rawurlencode( $size ),
+		'sad_cover' => rawurlencode( $cover ),
 	);
 
 	if ( '' !== $settings['start_code'] && 0 !== strcasecmp( $code, $settings['start_code'] ) ) {
@@ -69,14 +71,14 @@ function sad_handle_start() {
 		sad_start_redirect( array_merge( $keep, array( 'sad_error' => 'missing' ) ) );
 	}
 	$size_ids = wp_list_pluck( sad_get_sizes(), 'id' );
-	if ( ! in_array( $size, $size_ids, true ) ) {
+	if ( ! in_array( $size, $size_ids, true ) || ! isset( sad_cover_materials()[ $cover ] ) ) {
 		sad_start_redirect( array_merge( $keep, array( 'sad_error' => 'missing' ) ) );
 	}
 	if ( ! sad_rate_limit_ok( 'start', SAD_START_LIMIT ) ) {
 		sad_start_redirect( array( 'sad_error' => 'busy' ) );
 	}
 
-	$album_id = sad_create_client_album( $names, $email, $size );
+	$album_id = sad_create_client_album( $names, $email, $size, $cover );
 	if ( is_wp_error( $album_id ) ) {
 		sad_start_redirect( array_merge( $keep, array( 'sad_error' => 'failed' ) ) );
 	}
@@ -92,7 +94,7 @@ function sad_handle_start() {
  *
  * @return int|WP_Error
  */
-function sad_create_client_album( $names, $email, $size ) {
+function sad_create_client_album( $names, $email, $size, $cover = '' ) {
 	$settings = sad_get_settings();
 	$album_id = wp_insert_post(
 		array(
@@ -113,6 +115,7 @@ function sad_create_client_album( $names, $email, $size ) {
 	update_post_meta( $album_id, '_sad_started_by', 'client' );
 	update_post_meta( $album_id, '_sad_updated_at', time() );
 	sad_album_token( $album_id );
+	sad_set_album_cover_type( $album_id, $cover );
 
 	$to = $settings['notify_email'] ? $settings['notify_email'] : get_option( 'admin_email' );
 	wp_mail(
@@ -122,7 +125,7 @@ function sad_create_client_album( $names, $email, $size ) {
 			"%s (%s) has started an album: %s.\n\nSee all albums:\n%s\n",
 			$names,
 			$email,
-			sad_get_size( $size )['name'],
+			sad_get_size( $size )['name'] . ( isset( sad_cover_materials()[ $cover ] ) ? ', ' . sad_cover_materials()[ $cover ]['name'] . ' cover' : '' ),
 			admin_url( 'edit.php?post_type=sad_album' )
 		)
 	);
@@ -195,10 +198,11 @@ function sad_render_start_page() {
 	$names = isset( $_GET['sad_names'] ) ? sanitize_text_field( wp_unslash( $_GET['sad_names'] ) ) : '';
 	$email = isset( $_GET['sad_email'] ) ? sanitize_email( wp_unslash( $_GET['sad_email'] ) ) : '';
 	$size  = isset( $_GET['sad_size'] ) ? sanitize_title( wp_unslash( $_GET['sad_size'] ) ) : '';
+	$cover = isset( $_GET['sad_cover'] ) ? sanitize_title( wp_unslash( $_GET['sad_cover'] ) ) : '';
 	// phpcs:enable
 
 	$messages = array(
-		'missing' => 'Please fill in your names, a valid email address and an album size.',
+		'missing' => 'Please fill in your names, a valid email address, an album size and a cover.',
 		'code'    => 'That access code is not right. Please check the code we gave you.',
 		'busy'    => 'Too many albums were started from this connection. Please try again in an hour.',
 		'failed'  => 'Something went wrong creating your album. Please try again.',
@@ -220,7 +224,7 @@ function sad_render_start_page() {
 		<div class="sad-start__grid">
 			<form class="sad-card" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<h2 class="sad-title">Design your album</h2>
-				<p class="sad-help">Tell us who you are and choose your album size. We will email you a private link so you can come back to your design at any time.</p>
+				<p class="sad-help">Tell us who you are and choose your album size and cover. We will email you a private link so you can come back to your design at any time.</p>
 				<input type="hidden" name="action" value="sad_start">
 				<p class="sad-hp" aria-hidden="true"><label>Leave this empty <input type="text" name="sad_website" tabindex="-1" autocomplete="off"></label></p>
 				<p>
@@ -240,6 +244,19 @@ function sad_render_start_page() {
 						<?php endforeach; ?>
 					</select>
 				</p>
+				<fieldset class="sad-covers">
+					<legend>Cover</legend>
+					<?php foreach ( sad_cover_materials() as $cover_id => $material ) : ?>
+						<label class="sad-cover-option">
+							<input type="radio" name="sad_cover" value="<?php echo esc_attr( $cover_id ); ?>" required <?php checked( $cover, $cover_id ); ?>>
+							<span class="sad-cover-option__swatch sad-material--<?php echo esc_attr( $material['printed'] ? 'printed' : $material['texture'] ); ?>" style="<?php echo $material['colours'] ? 'background-color:' . esc_attr( reset( $material['colours'] )['hex'] ) : ''; ?>" aria-hidden="true"></span>
+							<span class="sad-cover-option__text">
+								<strong><?php echo esc_html( $material['name'] ); ?></strong>
+								<span class="sad-help"><?php echo esc_html( $material['printed'] ? 'Printed with your own photos' : sprintf( '%d colours', count( $material['colours'] ) ) ); ?></span>
+							</span>
+						</label>
+					<?php endforeach; ?>
+				</fieldset>
 				<?php if ( '' !== $settings['start_code'] ) : ?>
 					<p>
 						<label for="sad_code">Access code</label>

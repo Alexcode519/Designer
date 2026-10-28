@@ -143,11 +143,15 @@
 
 	/** A leather or linen cover: chosen, not designed, so it holds no photo boxes. */
 	function boundCover() {
-		return onCover() && state.design.cover.type !== 'photo';
+		return onCover() && ! isPrinted( state.design.cover );
+	}
+
+	function isPrinted( cover ) {
+		return !! coverMaterial( cover ).printed;
 	}
 
 	function coverMaterial( cover ) {
-		return ( state.album.covers || {} )[ cover.type ] || { name: '', colours: {} };
+		return ( state.album.covers || {} )[ cover.type ] || { name: '', printed: false, texture: 'leather', colours: {} };
 	}
 
 	function coverColour( cover ) {
@@ -217,7 +221,7 @@
 				}
 			} );
 		}
-		if ( state.design.cover.type === 'photo' ) {
+		if ( isPrinted( state.design.cover ) ) {
 			note( state.design.cover, 'Cover' );
 		}
 		state.design.spreads.forEach( function ( spread, n ) {
@@ -366,7 +370,7 @@
 
 	function setLayout( layoutId ) {
 		if ( boundCover() ) {
-			toast( 'Choose "Printed photo cover" on the right to put photos on the cover.' );
+			toast( 'To put photos on the cover, choose a printed cover on the right.' );
 			return;
 		}
 		var spread = currentSpread();
@@ -413,7 +417,7 @@
 	 */
 	function addItem( photoId, at ) {
 		if ( boundCover() ) {
-			toast( 'Choose "Printed photo cover" on the right to put photos on the cover.' );
+			toast( 'To put photos on the cover, choose a printed cover on the right.' );
 			return;
 		}
 		var spread = currentSpread();
@@ -620,6 +624,7 @@
 		var filled = buildAutoFill( template, photoIds );
 		checkpoint();
 		state.design.spreads = filled.spreads;
+		fillEmptyCover( photoIds[ 0 ] );
 		state.current = 0;
 		state.selectedItem = null;
 		state.armedPhoto = null;
@@ -632,7 +637,22 @@
 		toast( message, filled.skipped > 0 ? 'error' : 'success' );
 	}
 
-	function addSpread() {
+	/** Puts a photo on a printed cover that has none yet, in its front-cover box. */
+	function fillEmptyCover( photoId ) {
+		var cover = state.design.cover;
+		if ( ! photoId || ! isPrinted( cover ) || cover.items.some( function ( item ) {
+			return item.photo;
+		} ) ) {
+			return;
+		}
+		if ( ! cover.items.length ) {
+			var g = geo();
+			cover.items.push( newItem( null, 0.5, -g.b / g.th, 0.5 + g.b / g.tw, 1 + 2 * g.b / g.th ) );
+		}
+		cover.items[ cover.items.length - 1 ].photo = photoId;
+	}
+
+		function addSpread() {
 		if ( state.design.spreads.length >= state.album.maxSpreads ) {
 			toast( 'Your album can have up to ' + state.album.maxSpreads + ' spreads.' );
 			return;
@@ -812,9 +832,9 @@
 	function problems() {
 		var list = [];
 		var cover = state.design.cover;
-		if ( cover.type === 'photo' ) {
+		if ( isPrinted( cover ) ) {
 			if ( ! cover.items.length ) {
-				list.push( 'The printed cover has no photos. Add some, or choose leather or linen.' );
+				list.push( 'The printed cover has no photos. Add some, or choose a different cover.' );
 			} else if ( cover.items.some( function ( item ) {
 				return ! item.photo || ! state.photos[ item.photo ];
 			} ) ) {
@@ -838,7 +858,7 @@
 
 	function lowResolution() {
 		var list = [];
-		if ( state.design.cover.type === 'photo' && state.design.cover.items.some( isLowRes ) ) {
+		if ( isPrinted( state.design.cover ) && state.design.cover.items.some( isLowRes ) ) {
 			list.push( 'cover' );
 		}
 		state.design.spreads.forEach( function ( spread, n ) {
@@ -1298,7 +1318,7 @@
 	 * runs round each board (back and front), clear of the spine.
 	 */
 	function paintCover( node, cover, scale, off ) {
-		var bound = cover && cover.type !== 'photo';
+		var bound = cover && ! isPrinted( cover );
 		node.classList.remove( 'sad-material--leather', 'sad-material--linen' );
 		node.style.backgroundColor = '';
 		node.style.removeProperty( '--sad-stitch' );
@@ -1306,7 +1326,7 @@
 			return;
 		}
 		var hex = coverColour( cover );
-		node.classList.add( 'sad-material--' + cover.type );
+		node.classList.add( 'sad-material--' + coverMaterial( cover ).texture );
 		node.style.backgroundColor = hex;
 		var rgb = parseInt( hex.slice( 1 ), 16 );
 		var light = ( ( rgb >> 16 ) * 0.299 + ( ( rgb >> 8 ) & 255 ) * 0.587 + ( rgb & 255 ) * 0.114 ) > 150;
@@ -1639,7 +1659,7 @@
 					if ( colours.length && colours.indexOf( cover.colour ) === -1 ) {
 						cover.colour = colours[ 0 ];
 					}
-					if ( type === 'photo' && ! cover.items.length ) {
+					if ( covers[ type ].printed && ! cover.items.length ) {
 						// Start with one photo on the front cover.
 						var g = geo();
 						var bx = g.b / g.tw;
@@ -1660,7 +1680,7 @@
 				var swatch = el( 'button', {
 					type: 'button',
 					role: 'radio',
-					class: 'sad-swatch sad-material--' + cover.type,
+					class: 'sad-swatch sad-material--' + coverMaterial( cover ).texture,
 					title: colours[ id ].name,
 					'aria-label': colours[ id ].name,
 					'aria-checked': cover.colour === id ? 'true' : 'false',
@@ -1724,7 +1744,7 @@
 		container.style.height = g.th * scale + 'px';
 		var cover = spread === state.design.cover;
 		paintCover( container, cover ? spread : null, scale, 0 );
-		if ( ! cover || spread.type === 'photo' ) {
+		if ( ! cover || isPrinted( spread ) ) {
 			drawItems( container, spread, scale, 0, false );
 		}
 		container.appendChild( el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } ) );

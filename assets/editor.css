@@ -1918,3 +1918,104 @@ html.sad-locked body {
 	white-space: nowrap;
 	overflow-wrap: normal;
 }
+
+/* Start page: cover choice */
+
+#sad-start .sad-covers {
+	border: 0;
+	padding: 0;
+	margin: 0 0 16px;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 8px;
+}
+
+#sad-start .sad-covers legend {
+	padding: 0;
+	margin-bottom: 6px;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+#sad-start .sad-card .sad-cover-option {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--sad-line);
+	border-radius: 8px;
+	background: #fff;
+	cursor: pointer;
+	margin: 0;
+	font-weight: normal;
+}
+
+#sad-start .sad-card .sad-cover-option:hover {
+	border-color: #cfc8bd;
+}
+
+#sad-start .sad-card .sad-cover-option:has(input:checked) {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+#sad-start .sad-cover-option input {
+	position: absolute;
+	opacity: 0;
+	width: 1px;
+	height: 1px;
+}
+
+#sad-start .sad-cover-option:focus-within {
+	outline: 2px solid var(--sad-select);
+	outline-offset: 2px;
+}
+
+#sad-start .sad-cover-option__swatch {
+	width: 44px;
+	height: 44px;
+	border-radius: 4px;
+	flex: none;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+#sad-start .sad-material--printed {
+	background: linear-gradient(160deg, #e9d9c2 0 35%, #a8b6a1 35% 60%, #6f8a9a 60%);
+}
+
+#sad-start .sad-material--leather {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22) 80%),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#sad-start .sad-material--linen {
+	background-image:
+		repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px 3px),
+		repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 3px);
+}
+
+#sad-start .sad-cover-option__text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+#sad-start .sad-cover-option__text .sad-help {
+	font-size: 0.78rem;
+	margin: 0;
+}
+
+#sad-start h3 {
+	font-size: 1.35rem;
+	text-transform: none;
+	letter-spacing: 0.01em;
+	color: var(--sad-ink);
+}
+
+#sad-start .sad-card {
+	border-radius: 10px;
+	border-color: var(--sad-line);
+	box-shadow: 0 8px 28px rgba(36, 33, 29, 0.06);
+}

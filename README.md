@@ -8,7 +8,7 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 
 **For the client** (works on phone, tablet and computer, from any country):
 
-- Starts their own album on the Album Designer page: enters their names, email and album size, and gets their private link by email. (Or you create the album for them and send the link.)
+- Starts their own album on the Album Designer page: enters their names, email, album size and cover type, and gets their private link by email. (Or you create the album for them and send the link.)
 - Can ask for their link to be emailed again with "Already started?" on the same page.
 - Opens their private link. No account or app needed.
 - Uploads photos (JPEG or PNG). Large photos are sent in small pieces, so the hosting upload limit doesn't matter.
@@ -17,7 +17,7 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Drags photos from the photo panel (always beside the spread) onto a box to fill it, or onto an empty part of the spread to add a new box. Photos can also be dropped straight from their computer. On a phone: tap a photo, then tap a box or an empty spot.
 - Chooses per box whether the photo fills the box (cropped; zoom with the mouse wheel, + and − or the slider, and "Move photo in box" to reposition it) or shows whole. Swaps the photos of two boxes, duplicates or deletes boxes.
 - Sees red trim lines (anything outside is cut off) and green safe-area lines (keep faces inside) on every spread.
-- Chooses the cover on the cover spread (first in the strip, back cover left and front cover right): leather or linen in a choice of colours, shown with stitching, or a printed photo cover they design like a spread.
+- Sees the cover as the first spread (back cover left, front cover right) and can change it there: a bound cover such as leather or linen in a choice of colours, shown with stitching, or a printed photo cover (hard or soft) they design like a spread. Auto-fill puts the first photo on an empty printed cover.
 - Sees a tick and "Spread N" (or "Cover") on photos already used.
 - Undoes and redoes changes (buttons or Ctrl+Z / Ctrl+Y). Arrow keys nudge the selected box by 1 mm (10 mm with Shift); Delete removes it.
 - Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
@@ -43,6 +43,15 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 5. Link to the Album Designer page from wherever you send clients (an email, your booking confirmation or a button on a private page).
 
 To update the plugin later, upload the new ZIP the same way and choose **Replace current with uploaded**. Albums and photos are kept.
+
+## Cover types
+
+Under **Client albums > Settings > Cover types**, one per line:
+
+- `Hardcover photo | printed` for a cover printed with the client's photos.
+- `Leather | Black #1c1a19, Tan #b0835a` for a bound cover in those colours.
+
+Names with linen, fabric, cloth, canvas, velvet, silk or buckram get a woven look in the editor; other bound covers look like leather.
 
 ## Album sizes
 
@@ -81,4 +90,4 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 - `includes/render.php` and `assets/editor.js` share the crop and rotation logic. If you change one, change the other.
 - Designs saved by version 0.2 and earlier (fixed layout spaces) are converted to photo boxes automatically when opened.
 - Covers are drawn at spread size for now. If your printer needs a different cover size (wrap and spine), that needs adding as a cover size setting.
-- Filters: `sad_cover_materials` changes the cover materials and colours. `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.
+- Filters: `sad_cover_materials` changes the cover types and colours after they are read from Settings. `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.
