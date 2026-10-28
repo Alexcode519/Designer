@@ -38,6 +38,8 @@ function sad_activate() {
 
 	$page_id = (int) get_option( 'sad_designer_page_id' );
 	if ( ! $page_id || ! get_post( $page_id ) ) {
+		// Keep the new page out of menus that are set to add new pages automatically.
+		remove_action( 'transition_post_status', '_wp_auto_add_pages_to_menu', 10 );
 		$page_id = wp_insert_post(
 			array(
 				'post_type'    => 'page',
