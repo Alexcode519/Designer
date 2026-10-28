@@ -408,7 +408,11 @@
 		return id;
 	}
 
-	function uploadFiles( fileList ) {
+	/**
+	 * @param {FileList} fileList
+	 * @param {Object}   [target] { spread, slot }: place the first photo there once uploaded.
+	 */
+	function uploadFiles( fileList, target ) {
 		var files = Array.prototype.filter.call( fileList, function ( file ) {
 			var ok = /^image\/(jpeg|png)$/.test( file.type ) || /\.(jpe?g|png)$/i.test( file.name );
 			if ( ! ok ) {
@@ -429,6 +433,13 @@
 					.then( function ( photo ) {
 						state.photos[ photo.id ] = photo;
 						state.photoOrder.push( photo.id );
+						if ( target && state.design.spreads.indexOf( target.spread ) !== -1 && target.spread.slots[ target.slot ] ) {
+							target.spread.slots[ target.slot ] = { photo: photo.id, zoom: 1, x: 0.5, y: 0.5 };
+							target = null;
+							scheduleSave();
+							renderAll();
+							return;
+						}
 						renderTray();
 					} )
 					.catch( function ( error ) {
@@ -575,7 +586,7 @@
 			var slot = spread.slots[ index ] || emptySlot();
 			var w = rect[ 2 ] * width;
 			var h = rect[ 3 ] * height;
-			var node = el( 'div', { class: 'sad-slot' } );
+			var node = el( 'div', { class: 'sad-slot', 'data-index': String( index ) } );
 			node.style.left = rect[ 0 ] * 100 + '%';
 			node.style.top = rect[ 1 ] * 100 + '%';
 			node.style.width = rect[ 2 ] * 100 + '%';
@@ -640,8 +651,11 @@
 			node.classList.remove( 'sad-slot--over' );
 		} );
 		node.addEventListener( 'drop', function ( event ) {
-			event.preventDefault();
 			node.classList.remove( 'sad-slot--over' );
+			if ( hasFiles( event ) ) {
+				return; // Handled by the page-wide file drop, which knows this space.
+			}
+			event.preventDefault();
 			var from = event.dataTransfer.getData( 'text/x-sad-slot' );
 			if ( from !== '' && ! isNaN( parseInt( from, 10 ) ) ) {
 				swapSlots( parseInt( from, 10 ), index );
@@ -655,6 +669,13 @@
 
 		if ( photo ) {
 			enablePan( node, spread, index );
+			node.addEventListener( 'wheel', function ( event ) {
+				if ( state.selectedSlot !== index ) {
+					return;
+				}
+				event.preventDefault();
+				setZoom( spread.slots[ index ], spread.slots[ index ].zoom * Math.exp( -event.deltaY * 0.0015 ) );
+			}, { passive: false } );
 			// A placed photo that isn't selected can be dragged onto another space to swap them.
 			// The selected one is panned instead.
 			if ( state.selectedSlot !== index ) {
@@ -721,7 +742,7 @@
 		var inner = dom.stageWrap.clientWidth - parseFloat( wrapStyle.paddingLeft ) - parseFloat( wrapStyle.paddingRight );
 		var width = Math.min( inner, 1100 );
 		if ( window.innerHeight > 300 ) {
-			width = Math.min( width, ( window.innerHeight - 220 ) * spreadAspect() );
+			width = Math.min( width, ( window.innerHeight - 200 - ( state.headerOffset || 0 ) ) * spreadAspect() );
 		}
 		width = Math.max( width, 240 );
 		drawSpread( dom.stage, spread, width, true );
@@ -730,8 +751,25 @@
 		dom.next.disabled = state.current === state.design.spreads.length - 1;
 	}
 
+	var zoomSaveTimer;
+
+	/** Sets a placed photo's zoom (1 to 4) and updates the stage and slider without a full redraw. */
+	function setZoom( slot, value ) {
+		slot.zoom = Math.min( 4, Math.max( 1, value ) );
+		renderStage();
+		if ( dom.zoomInput ) {
+			dom.zoomInput.value = String( slot.zoom );
+		}
+		clearTimeout( zoomSaveTimer );
+		zoomSaveTimer = setTimeout( function () {
+			scheduleSave();
+			renderStrip();
+		}, 300 );
+	}
+
 	function renderSlotTools() {
 		dom.slotTools.innerHTML = '';
+		dom.zoomInput = null;
 		var spread = state.design.spreads[ state.current ];
 		var slot = state.selectedSlot !== null ? spread.slots[ state.selectedSlot ] : null;
 		if ( isLocked() ) {
@@ -746,19 +784,23 @@
 			return;
 		}
 		if ( ! slot || ! slot.photo ) {
-			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos from your tray into the spaces, or tap a photo then tap a space. Tap a placed photo to move or zoom it.' } ) );
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos from "Your photos" (or straight from your computer) onto a space, or tap a photo then tap a space. Click a placed photo to move or resize it.' } ) );
 			return;
 		}
-		var zoom = el( 'input', { type: 'range', min: '1', max: '3', step: '0.01', value: String( slot.zoom ), 'aria-label': 'Zoom' } );
+		var zoom = el( 'input', { type: 'range', min: '1', max: '4', step: '0.01', value: String( slot.zoom ), 'aria-label': 'Zoom' } );
+		dom.zoomInput = zoom;
 		zoom.addEventListener( 'input', function () {
-			slot.zoom = parseFloat( zoom.value );
-			renderStage();
+			setZoom( slot, parseFloat( zoom.value ) );
 		} );
-		zoom.addEventListener( 'change', function () {
-			scheduleSave();
-			renderStrip();
-		} );
-		dom.slotTools.appendChild( el( 'label', { class: 'sad-zoom' }, [ 'Zoom ', zoom ] ) );
+		dom.slotTools.appendChild( el( 'span', { class: 'sad-zoom' }, [
+			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom out', text: '−', onclick: function () {
+				setZoom( slot, slot.zoom / 1.15 );
+			} } ),
+			zoom,
+			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--icon', 'aria-label': 'Zoom in', text: '+', onclick: function () {
+				setZoom( slot, slot.zoom * 1.15 );
+			} } ),
+		] ) );
 		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Reset', onclick: function () {
 			slot.zoom = 1;
 			slot.x = 0.5;
@@ -771,7 +813,7 @@
 			scheduleSave();
 			renderAll();
 		} } ) );
-		dom.slotTools.appendChild( el( 'span', { class: 'sad-help', text: 'Drag the photo to move it.' } ) );
+		dom.slotTools.appendChild( el( 'span', { class: 'sad-help', text: 'Drag the photo to move it. Scroll or use + and − to make it bigger or smaller.' } ) );
 	}
 
 	function renderLayouts() {
@@ -1069,42 +1111,105 @@
 			dom.templates,
 			el( 'div', { class: 'sad-row' }, [ dom.autoButton, dom.autoInfo ] ),
 		] );
-		traySection.addEventListener( 'dragover', function ( event ) {
-			if ( ! isLocked() && event.dataTransfer && Array.prototype.indexOf.call( event.dataTransfer.types, 'Files' ) !== -1 ) {
-				event.preventDefault();
-				traySection.classList.add( 'sad-tray-section--over' );
-			}
-		} );
-		traySection.addEventListener( 'dragleave', function () {
-			traySection.classList.remove( 'sad-tray-section--over' );
-		} );
-		traySection.addEventListener( 'drop', function ( event ) {
-			if ( event.dataTransfer && event.dataTransfer.files.length && ! isLocked() ) {
-				event.preventDefault();
-				traySection.classList.remove( 'sad-tray-section--over' );
-				uploadFiles( event.dataTransfer.files );
-			}
-		} );
 
 		root.appendChild( el( 'div', { class: 'sad-header' }, [
 			el( 'div', {}, [ dom.title, dom.size ] ),
 			el( 'div', { class: 'sad-header__actions' }, [ dom.status, dom.approve ] ),
 		] ) );
 		root.appendChild( dom.banner );
-		root.appendChild( el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ) );
-		root.appendChild( dom.stageWrap );
-		root.appendChild( dom.slotTools );
-		root.appendChild( el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'All spreads' } ), dom.strip ] ) );
-		root.appendChild( dom.layoutsSection );
-		root.appendChild( dom.autoSection );
-		root.appendChild( traySection );
+		// The photo tray sits beside the spread (pinned to the bottom on narrow screens) and stays in
+		// view while scrolling, so photos can always be dragged straight onto the spread.
+		root.appendChild( el( 'div', { class: 'sad-workspace' }, [
+			el( 'div', { class: 'sad-main' }, [
+				el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
+				dom.stageWrap,
+				dom.slotTools,
+				el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'All spreads' } ), dom.strip ] ),
+				dom.layoutsSection,
+				dom.autoSection,
+			] ),
+			el( 'aside', { class: 'sad-side' }, [ traySection ] ),
+		] ) );
+		dom.dropOverlay = el( 'div', { class: 'sad-drop-overlay', hidden: true }, [ el( 'span', { text: 'Drop your photos to add them' } ) ] );
+		root.appendChild( dom.dropOverlay );
 		root.appendChild( dom.toasts );
+		enableFileDrop();
+		measureStickyHeader();
 
 		var resizeTimer;
 		window.addEventListener( 'resize', function () {
 			clearTimeout( resizeTimer );
-			resizeTimer = setTimeout( renderStage, 100 );
+			resizeTimer = setTimeout( function () {
+				measureStickyHeader();
+				renderStage();
+			}, 100 );
 		} );
+	}
+
+	function hasFiles( event ) {
+		return event.dataTransfer && Array.prototype.indexOf.call( event.dataTransfer.types || [], 'Files' ) !== -1;
+	}
+
+	/**
+	 * Photos dragged in from the computer can be dropped anywhere on the page. Dropped on a photo
+	 * space, the first one is placed there once it has uploaded.
+	 */
+	function enableFileDrop() {
+		var depth = 0;
+		document.addEventListener( 'dragenter', function ( event ) {
+			if ( ! hasFiles( event ) || isLocked() ) {
+				return;
+			}
+			depth += 1;
+			dom.dropOverlay.hidden = false;
+		} );
+		document.addEventListener( 'dragleave', function ( event ) {
+			if ( ! hasFiles( event ) ) {
+				return;
+			}
+			depth = Math.max( 0, depth - 1 );
+			if ( ! depth ) {
+				dom.dropOverlay.hidden = true;
+			}
+		} );
+		document.addEventListener( 'dragover', function ( event ) {
+			if ( hasFiles( event ) ) {
+				// Stops the browser opening the photo instead of uploading it.
+				event.preventDefault();
+				event.dataTransfer.dropEffect = isLocked() ? 'none' : 'copy';
+			}
+		} );
+		document.addEventListener( 'drop', function ( event ) {
+			if ( ! hasFiles( event ) ) {
+				return;
+			}
+			event.preventDefault();
+			depth = 0;
+			dom.dropOverlay.hidden = true;
+			if ( isLocked() || ! event.dataTransfer.files.length ) {
+				return;
+			}
+			var slot = event.target.closest ? event.target.closest( '.sad-stage .sad-slot' ) : null;
+			var target = slot ? { spread: state.design.spreads[ state.current ], slot: parseInt( slot.getAttribute( 'data-index' ), 10 ) } : null;
+			uploadFiles( event.dataTransfer.files, target );
+		} );
+	}
+
+	/** Keeps the tray and the editor clear of a theme's fixed or sticky header. */
+	function measureStickyHeader() {
+		var offset = 0;
+		var nodes = document.elementsFromPoint ? document.elementsFromPoint( window.innerWidth / 2, 2 ) : [];
+		nodes.forEach( function ( node ) {
+			for ( var n = node; n && n !== document.body && n !== root; n = n.parentElement ) {
+				var position = window.getComputedStyle( n ).position;
+				if ( position === 'fixed' || position === 'sticky' ) {
+					offset = Math.max( offset, Math.round( n.getBoundingClientRect().bottom ) );
+					break;
+				}
+			}
+		} );
+		state.headerOffset = Math.min( offset, 200 );
+		root.style.setProperty( '--sad-top', state.headerOffset + 16 + 'px' );
 	}
 
 	function applyAlbum( data ) {

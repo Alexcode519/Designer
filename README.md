@@ -12,8 +12,8 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Can ask for their link to be emailed again with "Already started?" on the same page.
 - Opens their private link. No account or app needed.
 - Uploads photos (JPEG or PNG). Large photos are sent in small pieces, so the hosting upload limit doesn't matter.
-- Picks a layout for each spread from 10 options, then drags photos into the spaces (on a phone: tap a photo, then tap a space).
-- Taps a placed photo to zoom it and drag it into position, or drags one placed photo onto another to swap them.
+- Picks a layout for each spread from 10 options, then drags photos from the photo panel (always beside the spread) into the spaces, or drops photos straight from their computer onto a space. On a phone: tap a photo, then tap a space.
+- Taps a placed photo to resize it (mouse wheel, + and − buttons, or the slider) and drag it into position, or drags one placed photo onto another to swap them.
 - Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
 - Adds, deletes and reorders spreads, within the minimum and maximum you set.
 - Sees a "Low quality" warning when a photo is enlarged too much to print sharply.

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Snippets Album Designer
  * Description:       Lets clients upload their photos and design their own album spreads online. Once a client approves, you download print-ready spreads (JPEG + PDF, with bleed) for your printer.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            Snippets Photography and Design
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SAD_VERSION', '0.1.0' );
+define( 'SAD_VERSION', '0.2.0' );
 define( 'SAD_FILE', __FILE__ );
 define( 'SAD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SAD_URL', plugin_dir_url( __FILE__ ) );

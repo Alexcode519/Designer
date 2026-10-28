@@ -622,3 +622,139 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* Workspace: spread on the left, photo tray pinned beside it */
+
+.sad-app {
+	--sad-top: 16px;
+	max-width: 1400px;
+}
+
+.sad-workspace {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 300px;
+	gap: 20px;
+	align-items: start;
+}
+
+.sad-side {
+	position: sticky;
+	top: var(--sad-top);
+	max-height: calc(100vh - var(--sad-top) - 16px);
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border: 1px solid var(--sad-line);
+}
+
+.sad-side .sad-tray-section {
+	margin: 0;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	border: 0;
+}
+
+.sad-side .sad-row {
+	gap: 8px;
+}
+
+.sad-side .sad-row h3 {
+	width: 100%;
+}
+
+.sad-side .sad-btn {
+	padding: 6px 10px;
+	font-size: 0.85rem;
+}
+
+.sad-side .sad-tray {
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+	grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+	gap: 6px;
+	padding-right: 2px;
+}
+
+.sad-btn--icon {
+	width: 34px;
+	padding-left: 0;
+	padding-right: 0;
+	text-align: center;
+	font-size: 1.1rem;
+	line-height: 1;
+}
+
+.sad-drop-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 99998;
+	background: rgba(29, 29, 27, 0.55);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.sad-drop-overlay span {
+	background: #fff;
+	color: var(--sad-ink);
+	padding: 18px 28px;
+	font-size: 1.1rem;
+	border: 2px dashed var(--sad-select);
+}
+
+/* Narrow screens: the tray becomes a strip pinned to the bottom of the screen */
+
+@media (max-width: 900px) {
+	.sad-workspace {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sad-side {
+		position: sticky;
+		top: auto;
+		bottom: 0;
+		max-height: none;
+		z-index: 50;
+		margin: 0 -12px;
+		box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+	}
+
+	.sad-side .sad-tray-section {
+		padding: 8px 12px;
+	}
+
+	.sad-side .sad-row h3 {
+		width: auto;
+		font-size: 0.95rem;
+	}
+
+	.sad-side .sad-tray {
+		display: flex;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 4px;
+	}
+
+	.sad-side .sad-photo {
+		flex: 0 0 72px;
+		width: 72px;
+		height: 72px;
+	}
+
+	.sad-side .sad-tray > .sad-help {
+		white-space: normal;
+	}
+}
+
+/* Let the editor use the full window width, even inside a narrow theme content column. */
+#sad-app.sad-app {
+	width: min(1600px, calc(100vw - 32px));
+	max-width: none;
+	margin-left: calc((100% - min(1600px, calc(100vw - 32px))) / 2);
+	margin-right: 0;
+}
