@@ -1,0 +1,2793 @@
+/*
+ * Snippets Album Designer: client editor. Fonts are inherited from the site theme.
+ *
+ * Rules are scoped to the editor's id so the site theme's (often Elementor's) button and form
+ * styles can't override them.
+ */
+
+.sad-app {
+	--sad-ink: #1d1d1b;
+	--sad-muted: #6b6b66;
+	--sad-line: #e3e1dc;
+	--sad-bg: #f6f5f2;
+	--sad-accent: #1d1d1b;
+	--sad-select: #b08d57;
+	--sad-danger: #a23b2a;
+	color: var(--sad-ink);
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 16px;
+	box-sizing: border-box;
+	position: relative;
+}
+
+.sad-app *,
+.sad-app *::before,
+.sad-app *::after {
+	box-sizing: border-box;
+}
+
+:is(#sad-app, #sad-start) .sad-loading,
+:is(#sad-app, #sad-start) .sad-message {
+	padding: 48px 16px;
+	text-align: center;
+	color: var(--sad-muted);
+}
+
+:is(#sad-app, #sad-start) .sad-header {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 12px;
+}
+
+:is(#sad-app, #sad-start) .sad-title {
+	margin: 0;
+	font-size: 1.5rem;
+	line-height: 1.2;
+}
+
+:is(#sad-app, #sad-start) .sad-size {
+	color: var(--sad-muted);
+	font-size: 0.9rem;
+}
+
+:is(#sad-app, #sad-start) .sad-header__actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+:is(#sad-app, #sad-start) .sad-status {
+	color: var(--sad-muted);
+	font-size: 0.85rem;
+}
+
+:is(#sad-app, #sad-start) .sad-banner {
+	background: #eef3ea;
+	border: 1px solid #c9d8bf;
+	padding: 12px 16px;
+	margin-bottom: 12px;
+}
+
+:is(#sad-app, #sad-start) .sad-btn {
+	appearance: none;
+	border: 1px solid var(--sad-accent);
+	background: #fff;
+	color: var(--sad-accent);
+	padding: 8px 14px;
+	font: inherit;
+	font-size: 0.9rem;
+	line-height: 1.2;
+	cursor: pointer;
+	border-radius: 2px;
+}
+
+:is(#sad-app, #sad-start) .sad-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary {
+	background: var(--sad-accent);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--ghost {
+	border-color: var(--sad-line);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--danger {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-btn:focus-visible,
+:is(#sad-app, #sad-start) .sad-item:focus-visible,
+:is(#sad-app, #sad-start) .sad-photo:focus-visible,
+:is(#sad-app, #sad-start) .sad-thumb:focus-visible,
+:is(#sad-app, #sad-start) .sad-layout:focus-visible {
+	outline: 2px solid var(--sad-select);
+	outline-offset: 2px;
+}
+
+:is(#sad-app, #sad-start) .sad-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-spread-label {
+	min-width: 110px;
+	text-align: center;
+	font-size: 0.9rem;
+}
+
+:is(#sad-app, #sad-start) .sad-spread-tools {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-left: auto;
+}
+
+:is(#sad-app, #sad-start) .sad-stage-wrap {
+	background: var(--sad-bg);
+	padding: 16px;
+	display: flex;
+	justify-content: center;
+	overflow: hidden;
+}
+
+:is(#sad-app, #sad-start) .sad-mini {
+	position: relative;
+	background: #fff;
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+	flex: none;
+	overflow: hidden;
+}
+
+:is(#sad-app, #sad-start) .sad-fold {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	background: rgba(0, 0, 0, 0.12);
+	pointer-events: none;
+}
+
+
+
+
+
+
+
+
+:is(#sad-app, #sad-start) .sad-slot-tools {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+	min-height: 52px;
+	padding: 10px 0;
+}
+
+:is(#sad-app, #sad-start) .sad-zoom {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.9rem;
+}
+
+:is(#sad-app, #sad-start) .sad-zoom input {
+	width: 180px;
+	max-width: 50vw;
+}
+
+:is(#sad-app, #sad-start) .sad-help {
+	color: var(--sad-muted);
+	font-size: 0.85rem;
+	margin: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-section {
+	margin-top: 20px;
+}
+
+:is(#sad-app, #sad-start) .sad-section h3 {
+	font-size: 1rem;
+	margin: 0 0 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-row h3 {
+	margin: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-strip {
+	display: flex;
+	gap: 10px;
+	overflow-x: auto;
+	padding: 4px 2px 10px;
+}
+
+:is(#sad-app, #sad-start) .sad-thumb {
+	appearance: none;
+	border: 2px solid transparent;
+	background: none;
+	padding: 2px;
+	cursor: pointer;
+	flex: none;
+	position: relative;
+}
+
+:is(#sad-app, #sad-start) .sad-thumb--active {
+	border-color: var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-thumb__num {
+	display: block;
+	font-size: 0.75rem;
+	color: var(--sad-muted);
+	text-align: center;
+	margin-top: 2px;
+}
+
+:is(#sad-app, #sad-start) .sad-thumb--add {
+	border: 1px dashed var(--sad-muted);
+	min-width: 120px;
+	color: var(--sad-muted);
+	font: inherit;
+	font-size: 0.85rem;
+}
+
+
+:is(#sad-app, #sad-start) .sad-layouts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-layout {
+	appearance: none;
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 6px;
+	cursor: pointer;
+	width: 92px;
+}
+
+:is(#sad-app, #sad-start) .sad-layout--active {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-layout__icon {
+	position: relative;
+	display: block;
+	width: 100%;
+	background: #f1efea;
+}
+
+:is(#sad-app, #sad-start) .sad-layout__box {
+	position: absolute;
+	background: #9a968c;
+	outline: 1px solid #f1efea;
+}
+
+:is(#sad-app, #sad-start) .sad-tray-section {
+	border: 1px dashed transparent;
+	padding: 8px;
+	margin-left: -8px;
+	margin-right: -8px;
+}
+
+:is(#sad-app, #sad-start) .sad-tray-section--over {
+	border-color: var(--sad-select);
+	background: #faf6ef;
+}
+
+:is(#sad-app, #sad-start) .sad-upload {
+	position: relative;
+	overflow: hidden;
+	display: inline-block;
+}
+
+:is(#sad-app, #sad-start) .sad-file {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+	font-size: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-count {
+	color: var(--sad-muted);
+	font-weight: normal;
+}
+
+:is(#sad-app, #sad-start) .sad-tray {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+	gap: 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-photo {
+	position: relative;
+	aspect-ratio: 1;
+	background: var(--sad-bg);
+	cursor: grab;
+	border: 2px solid transparent;
+}
+
+:is(#sad-app, #sad-start) .sad-photo img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-photo--armed {
+	border-color: var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-photo--used img {
+	opacity: 0.55;
+}
+
+:is(#sad-app, #sad-start) .sad-photo__used {
+	position: absolute;
+	left: 4px;
+	bottom: 4px;
+	background: var(--sad-accent);
+	color: #fff;
+	font-size: 0.7rem;
+	width: 18px;
+	height: 18px;
+	line-height: 18px;
+	text-align: center;
+	border-radius: 50%;
+}
+
+:is(#sad-app, #sad-start) .sad-photo__delete {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	font-size: 16px;
+	line-height: 24px;
+	padding: 0;
+	cursor: pointer;
+	opacity: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-photo:hover .sad-photo__delete,
+:is(#sad-app, #sad-start) .sad-photo:focus-within .sad-photo__delete {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	:is(#sad-app, #sad-start) .sad-photo__delete {
+		opacity: 1;
+	}
+}
+
+:is(#sad-app, #sad-start) .sad-toasts {
+	position: fixed;
+	left: 50%;
+	bottom: 16px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	z-index: 99999;
+	width: min(480px, calc(100vw - 32px));
+}
+
+:is(#sad-app, #sad-start) .sad-toast {
+	background: var(--sad-ink);
+	color: #fff;
+	padding: 10px 14px;
+	font-size: 0.9rem;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+:is(#sad-app, #sad-start) .sad-toast--error {
+	background: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-toast--success {
+	background: #3d6b35;
+}
+
+@media (max-width: 600px) {
+	.sad-app {
+		padding: 12px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-stage-wrap {
+		padding: 8px;
+		margin: 0 -12px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-spread-tools {
+		margin-left: 0;
+	}
+
+	:is(#sad-app, #sad-start) .sad-header__actions {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
+
+.sad-app [hidden] {
+	display: none !important;
+}
+
+
+:is(#sad-app, #sad-start) .sad-photo--selected {
+	border-color: var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-photo__check {
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	width: 22px;
+	height: 22px;
+	line-height: 20px;
+	text-align: center;
+	font-size: 0.8rem;
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.35);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-photo--selected .sad-photo__check {
+	background: var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-auto {
+	background: var(--sad-bg);
+	padding: 16px;
+}
+
+:is(#sad-app, #sad-start) .sad-auto > .sad-help {
+	margin-bottom: 10px;
+}
+
+:is(#sad-app, #sad-start) .sad-templates {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+:is(#sad-app, #sad-start) .sad-template {
+	appearance: none;
+	text-align: left;
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 10px;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+:is(#sad-app, #sad-start) .sad-template--active {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-template__icons {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+/* Start page */
+
+:is(#sad-app, #sad-start) .sad-start__grid {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	gap: 20px;
+	align-items: start;
+}
+
+:is(#sad-app, #sad-start) .sad-card {
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 20px;
+}
+
+:is(#sad-app, #sad-start) .sad-card h3 {
+	margin: 0 0 6px;
+	font-size: 1.1rem;
+}
+
+:is(#sad-app, #sad-start) .sad-card .sad-title {
+	margin-bottom: 6px;
+}
+
+:is(#sad-app, #sad-start) .sad-card label {
+	display: block;
+	font-size: 0.9rem;
+	margin-bottom: 4px;
+}
+
+:is(#sad-app, #sad-start) .sad-card input[type="text"],
+:is(#sad-app, #sad-start) .sad-card input[type="email"],
+:is(#sad-app, #sad-start) .sad-card select {
+	width: 100%;
+	padding: 10px;
+	border: 1px solid #c9c6bf;
+	border-radius: 2px;
+	font: inherit;
+	background: #fff;
+	color: inherit;
+}
+
+:is(#sad-app, #sad-start) .sad-card p {
+	margin: 0 0 14px;
+}
+
+:is(#sad-app, #sad-start) .sad-hp {
+	position: absolute !important;
+	left: -9999px !important;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
+:is(#sad-app, #sad-start) .sad-notice {
+	background: #eef3ea;
+	border: 1px solid #c9d8bf;
+	padding: 12px 16px;
+	margin-bottom: 16px;
+}
+
+:is(#sad-app, #sad-start) .sad-notice--error {
+	background: #f8ebe8;
+	border-color: #e2bdb5;
+}
+
+@media (max-width: 700px) {
+	:is(#sad-app, #sad-start) .sad-start__grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Workspace: photo tray pinned on the left, spread beside it */
+
+.sad-app {
+	--sad-top: 16px;
+	max-width: 1400px;
+}
+
+:is(#sad-app, #sad-start) .sad-workspace {
+	display: grid;
+	grid-template-columns: 300px minmax(0, 1fr);
+	gap: 20px;
+	align-items: start;
+}
+
+:is(#sad-app, #sad-start) .sad-side {
+	position: sticky;
+	top: var(--sad-top);
+	max-height: calc(100vh - var(--sad-top) - 16px);
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border: 1px solid var(--sad-line);
+}
+
+:is(#sad-app, #sad-start) .sad-side .sad-tray-section {
+	margin: 0;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	border: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-side .sad-row {
+	gap: 8px;
+}
+
+:is(#sad-app, #sad-start) .sad-side .sad-row h3 {
+	width: 100%;
+}
+
+:is(#sad-app, #sad-start) .sad-side .sad-btn {
+	padding: 6px 10px;
+	font-size: 0.85rem;
+}
+
+:is(#sad-app, #sad-start) .sad-side .sad-tray {
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+	grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+	gap: 6px;
+	padding-right: 2px;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--icon {
+	width: 34px;
+	padding-left: 0;
+	padding-right: 0;
+	text-align: center;
+	font-size: 1.1rem;
+	line-height: 1;
+}
+
+:is(#sad-app, #sad-start) .sad-drop-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 99998;
+	background: rgba(29, 29, 27, 0.55);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-drop-overlay span {
+	background: #fff;
+	color: var(--sad-ink);
+	padding: 18px 28px;
+	font-size: 1.1rem;
+	border: 2px dashed var(--sad-select);
+}
+
+/* Narrow screens: the tray becomes a strip pinned to the bottom of the screen */
+
+@media (max-width: 900px) {
+	:is(#sad-app, #sad-start) .sad-workspace {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	:is(#sad-app, #sad-start) .sad-side {
+		order: 2;
+		position: sticky;
+		top: auto;
+		bottom: 0;
+		max-height: none;
+		z-index: 50;
+		margin: 0 -12px;
+		box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+	}
+
+	:is(#sad-app, #sad-start) .sad-side .sad-tray-section {
+		padding: 8px 12px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-side .sad-row h3 {
+		width: auto;
+		font-size: 0.95rem;
+	}
+
+	:is(#sad-app, #sad-start) .sad-side .sad-tray {
+		display: flex;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 4px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-side .sad-photo {
+		flex: 0 0 72px;
+		width: 72px;
+		height: 72px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-side .sad-tray > .sad-help {
+		white-space: normal;
+	}
+}
+
+/* Let the editor use the full window width, even inside a narrow theme content column. */
+#sad-app.sad-app {
+	width: min(1600px, calc(100vw - 32px));
+	max-width: none;
+	margin-left: calc((100% - min(1600px, calc(100vw - 32px))) / 2);
+	margin-right: 0;
+}
+
+/* Spread stage: free photo boxes over the full print area, with bleed and safe-area guides */
+
+:is(#sad-app, #sad-start) .sad-stage {
+	position: relative;
+	flex: none;
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+	touch-action: none;
+}
+
+:is(#sad-app, #sad-start) .sad-stage-wrap {
+	padding: 28px 28px 56px;
+	overflow: visible;
+}
+
+:is(#sad-app, #sad-start) .sad-canvas {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-canvas--armed {
+	cursor: copy;
+}
+
+:is(#sad-app, #sad-start) .sad-item {
+	position: absolute;
+	cursor: move;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	transform-origin: 50% 50%;
+	outline: none;
+}
+
+:is(#sad-app, #sad-start) .sad-mini .sad-item {
+	cursor: inherit;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-item__img {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background-repeat: no-repeat;
+}
+
+:is(#sad-app, #sad-start) .sad-item__img--empty {
+	background: #ecebe7;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+:is(#sad-app, #sad-start) .sad-item__hint {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	color: var(--sad-muted);
+	font-size: 0.8rem;
+	padding: 4px;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-item__warn {
+	position: absolute;
+	right: 6px;
+	top: 6px;
+	width: 22px;
+	height: 22px;
+	line-height: 22px;
+	text-align: center;
+	border-radius: 50%;
+	background: #f2b705;
+	color: #1d1d1b;
+	font-size: 0.8rem;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+:is(#sad-app, #sad-start) .sad-item--over .sad-item__img {
+	box-shadow: inset 0 0 0 3px var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-item--adjusting {
+	cursor: grab;
+}
+
+:is(#sad-app, #sad-start) .sad-item--swap {
+	cursor: pointer;
+}
+
+:is(#sad-app, #sad-start) .sad-item--swap .sad-item__img {
+	box-shadow: inset 0 0 0 2px var(--sad-select);
+}
+
+:is(#sad-app, #sad-start) .sad-guides,
+:is(#sad-app, #sad-start) .sad-overlay {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-guides {
+	overflow: hidden;
+}
+
+:is(#sad-app, #sad-start) .sad-guide-trim {
+	position: absolute;
+	outline: 1px dashed #d12d2d;
+	box-shadow: 0 0 0 999px rgba(255, 255, 255, 0.45);
+}
+
+:is(#sad-app, #sad-start) .sad-guide-safe {
+	position: absolute;
+	outline: 1px dashed #2e9b4f;
+}
+
+:is(#sad-app, #sad-start) .sad-guide-fold {
+	position: absolute;
+	border-left: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+:is(#sad-app, #sad-start) .sad-snap {
+	position: absolute;
+	background: #e0249a;
+}
+
+:is(#sad-app, #sad-start) .sad-snap--x {
+	top: 0;
+	bottom: 0;
+	width: 1px;
+}
+
+:is(#sad-app, #sad-start) .sad-snap--y {
+	left: 0;
+	right: 0;
+	height: 1px;
+}
+
+:is(#sad-app, #sad-start) .sad-frame {
+	position: absolute;
+	outline: 2px solid #2f7ae5;
+	transform-origin: 50% 50%;
+}
+
+:is(#sad-app, #sad-start) .sad-frame--adjusting {
+	outline: 2px dashed #2f7ae5;
+}
+
+:is(#sad-app, #sad-start) .sad-handle {
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	margin: -6px 0 0 -6px;
+	background: #fff;
+	border: 2px solid #2f7ae5;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+:is(#sad-app, #sad-start) .sad-handle--nw { left: 0; top: 0; cursor: nwse-resize; }
+:is(#sad-app, #sad-start) .sad-handle--n { left: 50%; top: 0; cursor: ns-resize; }
+:is(#sad-app, #sad-start) .sad-handle--ne { left: 100%; top: 0; cursor: nesw-resize; }
+:is(#sad-app, #sad-start) .sad-handle--e { left: 100%; top: 50%; cursor: ew-resize; }
+:is(#sad-app, #sad-start) .sad-handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
+:is(#sad-app, #sad-start) .sad-handle--s { left: 50%; top: 100%; cursor: ns-resize; }
+:is(#sad-app, #sad-start) .sad-handle--sw { left: 0; top: 100%; cursor: nesw-resize; }
+:is(#sad-app, #sad-start) .sad-handle--w { left: 0; top: 50%; cursor: ew-resize; }
+
+:is(#sad-app, #sad-start) .sad-rotate {
+	position: absolute;
+	left: 50%;
+	top: 100%;
+	width: 24px;
+	height: 24px;
+	margin: 14px 0 0 -12px;
+	border-radius: 50%;
+	background: #2f7ae5;
+	color: #fff;
+	font-size: 14px;
+	line-height: 24px;
+	text-align: center;
+	cursor: grab;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+:is(#sad-app, #sad-start) .sad-dims {
+	position: absolute;
+	left: 50%;
+	top: 0;
+	transform: translate(-50%, 6px);
+	background: rgba(29, 29, 27, 0.8);
+	color: #fff;
+	font-size: 0.72rem;
+	padding: 2px 8px;
+	border-radius: 10px;
+	white-space: nowrap;
+}
+
+:is(#sad-app, #sad-start) .sad-float {
+	position: absolute;
+	transform: translateX(-50%);
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	background: #fff;
+	border-radius: 6px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+	pointer-events: auto;
+	z-index: 2;
+}
+
+:is(#sad-app, #sad-start) .sad-float__btn {
+	width: 32px;
+	height: 32px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--sad-ink);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-float__btn:hover,
+:is(#sad-app, #sad-start) .sad-float__btn[aria-pressed="true"] {
+	background: #e8f0fc;
+	color: #2f7ae5;
+}
+
+:is(#sad-app, #sad-start) .sad-lowres {
+	margin-top: 8px;
+	padding: 8px 12px;
+	background: #fdecea;
+	color: var(--sad-danger);
+	font-size: 0.85rem;
+}
+
+:is(#sad-app, #sad-start) .sad-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin-top: 8px;
+	font-size: 0.78rem;
+	color: var(--sad-muted);
+}
+
+:is(#sad-app, #sad-start) .sad-legend span::before {
+	content: "";
+	display: inline-block;
+	width: 18px;
+	margin-right: 6px;
+	vertical-align: middle;
+	border-top: 2px dashed;
+}
+
+:is(#sad-app, #sad-start) .sad-legend__trim::before {
+	color: #d12d2d;
+}
+
+:is(#sad-app, #sad-start) .sad-legend__safe::before {
+	color: #2e9b4f;
+}
+
+:is(#sad-app, #sad-start) .sad-edit-tools {
+	display: flex;
+	gap: 6px;
+	margin-right: auto;
+}
+
+:is(#sad-app, #sad-start) .sad-seg {
+	display: inline-flex;
+	border: 1px solid var(--sad-line);
+}
+
+:is(#sad-app, #sad-start) .sad-seg__btn {
+	border: 0;
+	background: #fff;
+	padding: 7px 12px;
+	font: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+	color: var(--sad-ink);
+}
+
+:is(#sad-app, #sad-start) .sad-seg__btn[aria-pressed="true"] {
+	background: var(--sad-accent);
+	color: #fff;
+}
+
+#sad-app .sad-num {
+	width: 72px;
+	flex: none;
+	padding: 5px 6px;
+	font: inherit;
+}
+
+:is(#sad-app, #sad-start) .sad-help--warn {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-photo__where {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	padding: 2px 4px 2px 24px;
+	background: rgba(29, 29, 27, 0.65);
+	color: #fff;
+	font-size: 0.62rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
+}
+
+:is(#sad-app, #sad-start) .sad-photo__where + .sad-photo__delete,
+:is(#sad-app, #sad-start) .sad-photo__used {
+	z-index: 1;
+}
+
+@media (max-width: 600px) {
+	:is(#sad-app, #sad-start) .sad-stage-wrap {
+		padding: 20px 12px 48px;
+	}
+
+	:is(#sad-app, #sad-start) .sad-handle {
+		width: 18px;
+		height: 18px;
+		margin: -9px 0 0 -9px;
+	}
+}
+
+/* Undo theme styling on the editor's own controls */
+
+:is(#sad-app, #sad-start) button,
+:is(#sad-app, #sad-start) input[type="number"],
+:is(#sad-app, #sad-start) input[type="range"] {
+	border-radius: 0;
+	box-shadow: none;
+	text-transform: none;
+	letter-spacing: normal;
+	font-family: inherit;
+	font-weight: normal;
+	min-height: 0;
+	min-width: 0;
+	margin: 0;
+	text-decoration: none;
+	transition: none;
+}
+
+:is(#sad-app, #sad-start) button:hover,
+:is(#sad-app, #sad-start) button:focus {
+	box-shadow: none;
+	text-decoration: none;
+}
+
+:is(#sad-app, #sad-start) .sad-btn {
+	border-radius: 2px;
+	font-weight: 500;
+}
+
+:is(#sad-app, #sad-start) .sad-btn:hover {
+	background: #fff;
+	color: var(--sad-accent);
+	border-color: var(--sad-accent);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary,
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: var(--sad-accent);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--ghost {
+	border-color: var(--sad-line);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--ghost:hover {
+	border-color: var(--sad-muted);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--danger,
+:is(#sad-app, #sad-start) .sad-btn--danger:hover {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-thumb,
+:is(#sad-app, #sad-start) .sad-thumb:hover,
+:is(#sad-app, #sad-start) .sad-layout,
+:is(#sad-app, #sad-start) .sad-layout:hover,
+:is(#sad-app, #sad-start) .sad-template,
+:is(#sad-app, #sad-start) .sad-template:hover {
+	color: var(--sad-ink);
+	border-radius: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-thumb:hover,
+:is(#sad-app, #sad-start) .sad-thumb {
+	background: none;
+}
+
+:is(#sad-app, #sad-start) .sad-layout:hover,
+:is(#sad-app, #sad-start) .sad-template:hover {
+	background: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-float__btn {
+	border-radius: 4px;
+	padding: 0;
+}
+
+/* Side panel tabs */
+
+#sad-app .sad-tabs {
+	display: flex;
+	border-bottom: 1px solid var(--sad-line);
+	flex: none;
+}
+
+#sad-app .sad-tab {
+	flex: 1;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: none;
+	padding: 10px 6px;
+	font-size: 0.9rem;
+	color: var(--sad-muted);
+	cursor: pointer;
+}
+
+#sad-app .sad-tab:hover {
+	background: var(--sad-bg);
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-tab[aria-selected="true"] {
+	color: var(--sad-ink);
+	border-bottom-color: var(--sad-accent);
+	font-weight: 600;
+}
+
+#sad-app .sad-side > .sad-section {
+	margin: 0;
+	padding: 12px;
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+}
+
+#sad-app .sad-side > .sad-section > h3 {
+	display: none;
+}
+
+#sad-app .sad-side .sad-layouts {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+}
+
+#sad-app .sad-side .sad-templates {
+	grid-template-columns: 1fr;
+}
+
+#sad-app .sad-side .sad-auto {
+	background: none;
+}
+
+#sad-app .sad-tools {
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 12px;
+}
+
+#sad-app .sad-tools .sad-lowres {
+	margin: 0 0 10px;
+}
+
+#sad-app .sad-tools .sad-legend {
+	margin-top: 12px;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#sad-app .sad-tools__title {
+	width: 100%;
+	margin: 0;
+	font-size: 1rem;
+}
+
+#sad-app .sad-home {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border: 1px solid var(--sad-line);
+	color: var(--sad-ink);
+	text-decoration: none;
+	font-size: 1.1rem;
+	flex: none;
+}
+
+#sad-app .sad-header__name {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+#sad-app .sad-strip-section {
+	margin-top: 8px;
+}
+
+/* Computers: the editor fills the window, nothing scrolls except the panels */
+
+html.sad-locked,
+html.sad-locked body {
+	overflow: hidden !important;
+}
+
+#sad-app.sad-app--full {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	width: auto;
+	max-width: none;
+	margin: 0;
+	padding: 0;
+	background: var(--sad-bg);
+	display: flex;
+	flex-direction: column;
+}
+
+#sad-app.sad-app--full .sad-header {
+	flex: none;
+	margin: 0;
+	padding: 8px 16px;
+	background: #fff;
+	border-bottom: 1px solid var(--sad-line);
+	flex-wrap: nowrap;
+}
+
+#sad-app.sad-app--full .sad-title {
+	font-size: 1.1rem;
+	margin: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#sad-app.sad-app--full .sad-edit-tools {
+	margin: 0 auto;
+}
+
+#sad-app.sad-app--full .sad-banner {
+	flex: none;
+	margin: 0;
+}
+
+#sad-app.sad-app--full .sad-workspace {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 300px minmax(0, 1fr) 250px;
+	gap: 0;
+	align-items: stretch;
+}
+
+#sad-app.sad-app--full .sad-side {
+	position: static;
+	max-height: none;
+	min-height: 0;
+	height: 100%;
+	border-width: 0 1px 0 0;
+}
+
+#sad-app.sad-app--full .sad-side .sad-tray-section {
+	padding: 12px;
+}
+
+#sad-app.sad-app--full .sad-main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	padding: 8px 16px 0;
+}
+
+#sad-app.sad-app--full .sad-nav {
+	flex: none;
+	margin-bottom: 0;
+}
+
+#sad-app.sad-app--full .sad-stage-wrap {
+	flex: 1 1 0;
+	min-height: 0;
+	align-items: center;
+	background: none;
+	padding: 34px 40px 52px;
+	overflow: hidden;
+}
+
+#sad-app.sad-app--full .sad-strip-section {
+	flex: none;
+	margin: 0 -16px;
+	padding: 8px 16px 4px;
+	background: #fff;
+	border-top: 1px solid var(--sad-line);
+}
+
+#sad-app.sad-app--full .sad-tools {
+	border-width: 0 0 0 1px;
+	overflow-y: auto;
+	min-height: 0;
+}
+
+#sad-app.sad-app--full .sad-slot-tools {
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	gap: 10px;
+}
+
+#sad-app.sad-app--full .sad-slot-tools .sad-seg {
+	display: flex;
+}
+
+#sad-app.sad-app--full .sad-slot-tools .sad-seg__btn {
+	flex: 1;
+	padding: 7px 4px;
+}
+
+#sad-app.sad-app--full .sad-zoom input[type="range"] {
+	flex: 1;
+	width: auto;
+}
+
+#sad-app.sad-app--full .sad-toasts {
+	position: fixed;
+}
+
+/* Phones: one scrolling column, photo panel pinned to the bottom */
+
+@media (max-width: 899px), (max-height: 559px) {
+	#sad-app .sad-side > .sad-section {
+		max-height: 38vh;
+	}
+
+	#sad-app .sad-tools {
+		margin-top: 8px;
+	}
+
+	#sad-app .sad-main {
+		display: flex;
+		flex-direction: column;
+	}
+
+	#sad-app .sad-workspace {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	#sad-app .sad-main {
+		order: 1;
+	}
+
+	#sad-app .sad-tools {
+		order: 2;
+	}
+
+	#sad-app .sad-side {
+		order: 3;
+	}
+}
+
+#sad-app .sad-main,
+#sad-app .sad-strip-section,
+#sad-app .sad-tools {
+	min-width: 0;
+}
+
+#sad-app .sad-tools {
+	overflow-x: hidden;
+}
+
+#sad-app .sad-tools .sad-zoom {
+	width: 100%;
+}
+
+#sad-app .sad-tools .sad-zoom input[type="range"] {
+	flex: 1;
+	width: auto;
+	min-width: 0;
+}
+
+#sad-app .sad-num {
+	background: #fff;
+	color: var(--sad-ink);
+	border: 1px solid var(--sad-line);
+	border-radius: 0;
+	padding: 5px 6px;
+	height: auto;
+	font-weight: normal;
+	text-transform: none;
+}
+
+#sad-app input[type="range"] {
+	background: transparent;
+	border: 0;
+	padding: 0;
+}
+
+#sad-app .sad-side .sad-layout {
+	width: 100%;
+}
+
+/* ------------------------------------------------------------------
+ * Finish: calmer palette, softer edges, consistent type, and text that
+ * always wraps inside its box whatever font the site theme uses.
+ * ------------------------------------------------------------------ */
+
+#sad-app.sad-app,
+#sad-start.sad-app {
+	--sad-ink: #24211d;
+	--sad-muted: #857e74;
+	--sad-line: #e7e2da;
+	--sad-bg: #f4f1ec;
+	--sad-accent: #24211d;
+	--sad-select: #a8875a;
+	--sad-danger: #a5402d;
+	--sad-radius: 8px;
+	font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.45;
+	-webkit-font-smoothing: antialiased;
+}
+
+#sad-app button,
+#sad-app .sad-btn,
+#sad-app .sad-help,
+#sad-app .sad-template,
+#sad-app .sad-template * {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+#sad-app .sad-title,
+#sad-start .sad-title,
+#sad-start h2,
+#sad-start h3 {
+	font-family: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+}
+
+#sad-app.sad-app--full .sad-title {
+	font-size: 1.35rem;
+	line-height: 1.15;
+}
+
+#sad-app .sad-size,
+#sad-app .sad-status {
+	font-size: 0.78rem;
+	color: var(--sad-muted);
+	letter-spacing: 0.02em;
+}
+
+#sad-app h3,
+#sad-start h3 {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-tools__title {
+	font-size: 0.72rem;
+	margin-bottom: 2px;
+}
+
+/* Buttons */
+
+:is(#sad-app, #sad-start) .sad-btn {
+	border-radius: 6px;
+	padding: 8px 14px;
+	font-size: 0.85rem;
+	font-weight: 500;
+	line-height: 1.2;
+	border: 1px solid var(--sad-line);
+	background: #fff;
+	color: var(--sad-ink);
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+:is(#sad-app, #sad-start) .sad-btn:hover {
+	background: #faf8f5;
+	border-color: #cfc8bd;
+	color: var(--sad-ink);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary,
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: var(--sad-ink);
+	border-color: var(--sad-ink);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: #3a352f;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--danger,
+:is(#sad-app, #sad-start) .sad-btn--danger:hover {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--icon {
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#sad-app .sad-home {
+	border-radius: 6px;
+}
+
+/* Header */
+
+#sad-app.sad-app--full .sad-header {
+	padding: 10px 20px;
+	box-shadow: 0 1px 0 var(--sad-line), 0 4px 16px rgba(36, 33, 29, 0.04);
+	border-bottom: 0;
+	position: relative;
+	z-index: 2;
+}
+
+/* Panels */
+
+#sad-app.sad-app--full .sad-side,
+#sad-app.sad-app--full .sad-tools {
+	background: #fff;
+	border-color: var(--sad-line);
+}
+
+#sad-app .sad-tools {
+	border-radius: var(--sad-radius);
+}
+
+#sad-app.sad-app--full .sad-tools {
+	border-radius: 0;
+	padding: 16px;
+}
+
+#sad-app .sad-tab {
+	font-size: 0.8rem;
+	letter-spacing: 0.04em;
+	padding: 12px 6px;
+}
+
+#sad-app .sad-tab[aria-selected="true"] {
+	border-bottom-color: var(--sad-select);
+}
+
+/* Photo tray */
+
+#sad-app .sad-photo {
+	border-radius: 6px;
+	border: 2px solid transparent;
+	background: var(--sad-bg);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+#sad-app .sad-photo img {
+	border-radius: 4px;
+}
+
+#sad-app .sad-photo__where {
+	border-radius: 0 0 4px 4px;
+}
+
+#sad-app .sad-tray {
+	align-content: start;
+}
+
+#sad-app .sad-photo:hover {
+	box-shadow: 0 4px 12px rgba(36, 33, 29, 0.15);
+}
+
+#sad-app .sad-photo--armed,
+#sad-app .sad-photo--selected {
+	border-color: var(--sad-select);
+}
+
+#sad-app .sad-photo--used img {
+	opacity: 0.6;
+}
+
+#sad-app .sad-photo__used {
+	background: var(--sad-select);
+}
+
+/* Layouts and auto-fill cards */
+
+#sad-app .sad-layout,
+#sad-app .sad-template {
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #fff;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#sad-app .sad-layout:hover,
+#sad-app .sad-template:hover {
+	border-color: #cfc8bd;
+	background: #fff;
+	box-shadow: 0 2px 10px rgba(36, 33, 29, 0.06);
+}
+
+#sad-app .sad-layout--active,
+#sad-app .sad-template--active,
+#sad-app .sad-layout--active:hover,
+#sad-app .sad-template--active:hover {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+#sad-app .sad-layout__box {
+	background: #cdc6bb;
+	border-radius: 1px;
+}
+
+#sad-app .sad-template strong {
+	font-family: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-size: 1.15rem;
+	font-weight: 500;
+}
+
+/* Stage */
+
+#sad-app.sad-app--full .sad-workspace {
+	background: var(--sad-bg);
+}
+
+#sad-app .sad-stage {
+	box-shadow: 0 1px 2px rgba(36, 33, 29, 0.08), 0 12px 32px rgba(36, 33, 29, 0.14);
+}
+
+#sad-app .sad-page-labels {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 100%;
+	display: flex;
+	padding-top: 10px;
+	pointer-events: none;
+}
+
+#sad-app .sad-page-labels span {
+	flex: 1;
+	text-align: center;
+	font-size: 0.72rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--sad-muted);
+}
+
+/* Spread strip */
+
+#sad-app .sad-thumb {
+	border-radius: 6px;
+	padding: 4px;
+	border: 2px solid transparent;
+}
+
+#sad-app .sad-thumb:hover .sad-mini {
+	box-shadow: 0 4px 14px rgba(36, 33, 29, 0.18);
+}
+
+#sad-app .sad-thumb--active,
+#sad-app .sad-thumb--active:hover {
+	border-color: var(--sad-select);
+}
+
+#sad-app .sad-mini {
+	box-shadow: 0 1px 4px rgba(36, 33, 29, 0.14);
+}
+
+#sad-app .sad-thumb__num {
+	font-size: 0.72rem;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-thumb__pages {
+	display: flex;
+	justify-content: space-between;
+	gap: 4px;
+}
+
+#sad-app .sad-thumb__pages span:nth-child(2) {
+	color: var(--sad-ink);
+	font-weight: 600;
+}
+
+#sad-app .sad-thumb--add {
+	border: 1px dashed #cfc8bd;
+	border-radius: 6px;
+	color: var(--sad-muted);
+}
+
+/* Settings panel */
+
+#sad-app .sad-seg {
+	border-radius: 6px;
+	overflow: hidden;
+	border-color: var(--sad-line);
+}
+
+#sad-app .sad-seg__btn {
+	line-height: 1.2;
+	padding: 8px 6px;
+	font-size: 0.8rem;
+}
+
+#sad-app .sad-tools .sad-zoom {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	gap: 8px;
+	align-items: center;
+}
+
+#sad-app .sad-tools label.sad-zoom {
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	font-size: 0.85rem;
+}
+
+#sad-app .sad-tools .sad-num {
+	width: 100%;
+	border-radius: 6px;
+}
+
+#sad-app .sad-lowres {
+	border-radius: 6px;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+#sad-app .sad-tools__label {
+	margin: 6px 0 0;
+	font-size: 0.85rem;
+}
+
+#sad-app .sad-choice {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#sad-app .sad-choice__btn {
+	text-align: left;
+	padding: 10px 12px;
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #fff;
+	color: var(--sad-ink);
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+#sad-app .sad-choice__btn:hover {
+	border-color: #cfc8bd;
+	background: #fff;
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-choice__btn[aria-checked="true"] {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+	font-weight: 600;
+}
+
+#sad-app .sad-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+#sad-app .sad-swatch {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px var(--sad-line);
+	cursor: pointer;
+	padding: 0;
+}
+
+#sad-app .sad-swatch:hover {
+	box-shadow: 0 0 0 1px #cfc8bd;
+}
+
+#sad-app .sad-swatch[aria-checked="true"] {
+	box-shadow: 0 0 0 2px var(--sad-select);
+}
+
+/* Cover materials: subtle grain over the chosen colour */
+
+#sad-app .sad-material--leather {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22) 80%),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.16' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.9 0.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 100% 100%, 110px 110px, 80px 80px;
+}
+
+#sad-app .sad-material--linen {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.14) 85%),
+		repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+		repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 3px),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#sad-app .sad-mini.sad-material--leather {
+	background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+#sad-app .sad-stitch {
+	position: absolute;
+	border: 1.5px dashed var(--sad-stitch);
+	border-radius: 3px;
+	pointer-events: none;
+}
+
+#sad-app .sad-mini .sad-stitch {
+	border-width: 1px;
+}
+
+#sad-app .sad-spine {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 6%;
+	transform: translateX(-50%);
+	background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.22) 45%, rgba(255, 255, 255, 0.06) 55%, transparent);
+	pointer-events: none;
+}
+
+#sad-app .sad-swatch.sad-material--leather,
+#sad-app .sad-swatch.sad-material--linen {
+	background-size: 100% 100%, 30px 30px, 30px 30px;
+}
+
+#sad-app .sad-guides--hidden {
+	display: none;
+}
+
+#sad-app .sad-dims {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#sad-app .sad-tools__photo {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	padding: 8px;
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #faf8f5;
+}
+
+#sad-app .sad-tools__photo img {
+	width: 48px;
+	height: 48px;
+	object-fit: cover;
+	border-radius: 4px;
+	flex: none;
+}
+
+#sad-app .sad-tools__photo > span {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+#sad-app .sad-tools__name {
+	font-size: 0.85rem;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+/* Start page: cover choice */
+
+#sad-start .sad-covers {
+	border: 0;
+	padding: 0;
+	margin: 0 0 16px;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 8px;
+}
+
+#sad-start .sad-covers legend {
+	padding: 0;
+	margin-bottom: 6px;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+#sad-start .sad-card .sad-cover-option {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--sad-line);
+	border-radius: 8px;
+	background: #fff;
+	cursor: pointer;
+	margin: 0;
+	font-weight: normal;
+}
+
+#sad-start .sad-card .sad-cover-option:hover {
+	border-color: #cfc8bd;
+}
+
+#sad-start .sad-card .sad-cover-option:has(input:checked) {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+#sad-start .sad-cover-option input {
+	position: absolute;
+	opacity: 0;
+	width: 1px;
+	height: 1px;
+}
+
+#sad-start .sad-cover-option:focus-within {
+	outline: 2px solid var(--sad-select);
+	outline-offset: 2px;
+}
+
+#sad-start .sad-cover-option__swatch {
+	width: 44px;
+	height: 44px;
+	border-radius: 4px;
+	flex: none;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+#sad-start .sad-material--printed {
+	background: linear-gradient(160deg, #e9d9c2 0 35%, #a8b6a1 35% 60%, #6f8a9a 60%);
+}
+
+#sad-start .sad-material--leather {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22) 80%),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#sad-start .sad-material--linen {
+	background-image:
+		repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px 3px),
+		repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 3px);
+}
+
+#sad-start .sad-cover-option__text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+#sad-start .sad-cover-option__text .sad-help {
+	font-size: 0.78rem;
+	margin: 0;
+}
+
+#sad-start h3 {
+	font-size: 1.35rem;
+	text-transform: none;
+	letter-spacing: 0.01em;
+	color: var(--sad-ink);
+}
+
+#sad-start .sad-card {
+	border-radius: 10px;
+	border-color: var(--sad-line);
+	box-shadow: 0 8px 28px rgba(36, 33, 29, 0.06);
+}
+
+/* ---------- v0.6: text, backgrounds, notes, extras, book preview ---------- */
+
+#sad-app .sad-item--text {
+	overflow: visible;
+	background: none;
+}
+
+#sad-app .sad-item__text,
+#sad-app .sad-text-svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	pointer-events: none;
+}
+
+#sad-app .sad-item--text:hover {
+	outline: 1px dashed rgba(168, 135, 90, 0.7);
+}
+
+#sad-app .sad-frame--text .sad-handle--n,
+#sad-app .sad-frame--text .sad-handle--s {
+	display: none;
+}
+
+#sad-app .sad-guide-spine {
+	position: absolute;
+	background: repeating-linear-gradient(135deg, rgba(168, 135, 90, 0.16) 0 6px, rgba(168, 135, 90, 0.05) 6px 12px);
+	border-left: 1px solid rgba(168, 135, 90, 0.7);
+	border-right: 1px solid rgba(168, 135, 90, 0.7);
+}
+
+#sad-app .sad-textarea,
+#sad-app .sad-select {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	font-size: 0.9rem;
+	color: var(--sad-ink);
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	padding: 8px 10px;
+	line-height: 1.4;
+	resize: vertical;
+	box-shadow: none;
+}
+
+#sad-app .sad-textarea:focus,
+#sad-app .sad-select:focus {
+	outline: 2px solid var(--sad-select);
+	outline-offset: 0;
+}
+
+#sad-app .sad-field {
+	display: grid;
+	gap: 4px;
+	font-size: 0.8rem;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-colours {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0 0 4px;
+}
+
+#sad-app .sad-colour {
+	width: 26px;
+	height: 26px;
+	min-height: 0;
+	padding: 0;
+	border-radius: 50%;
+	border: 1px solid rgba(0, 0, 0, 0.18);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+#sad-app .sad-colour[aria-checked="true"] {
+	box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--sad-select);
+}
+
+#sad-app .sad-colour--custom {
+	background: conic-gradient(#e44, #fd4, #4d6, #4bd, #66f, #d4d, #e44);
+	-webkit-appearance: none;
+	appearance: none;
+	overflow: hidden;
+}
+
+#sad-app .sad-colour--custom::-webkit-color-swatch,
+#sad-app .sad-colour--custom::-webkit-color-swatch-wrapper {
+	opacity: 0;
+}
+
+#sad-app .sad-notes,
+#sad-app .sad-summary {
+	display: grid;
+	gap: 8px;
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid var(--sad-line);
+}
+
+#sad-app .sad-note {
+	border-left: 3px solid #8aa2b8;
+	padding: 2px 0 2px 10px;
+}
+
+#sad-app .sad-note--studio {
+	border-left-color: var(--sad-select);
+}
+
+#sad-app .sad-note--done {
+	opacity: 0.55;
+}
+
+#sad-app .sad-note__meta {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.75rem;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-note__meta strong {
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-note__done {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+}
+
+#sad-app .sad-note__text {
+	margin: 2px 0 0;
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+#sad-app .sad-thumb {
+	position: relative;
+}
+
+#sad-app .sad-thumb__notes {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	background: var(--sad-select);
+	color: #fff;
+	font-size: 0.65rem;
+	line-height: 1;
+	padding: 3px 5px;
+	border-radius: 8px;
+}
+
+#sad-app .sad-extras {
+	display: grid;
+	gap: 4px;
+	font-size: 0.85rem;
+}
+
+#sad-app .sad-extras__row {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+#sad-app .sad-extras__total {
+	border-top: 1px solid var(--sad-line);
+	padding-top: 4px;
+	font-weight: 600;
+}
+
+/* Book preview */
+
+#sad-app .sad-preview {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	background: radial-gradient(ellipse at center, #3a3631 0%, #1c1a17 75%);
+	color: #f4efe7;
+}
+
+#sad-app .sad-preview__bar {
+	width: 100%;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 12px 20px;
+}
+
+#sad-app .sad-preview__bar:first-child {
+	justify-content: space-between;
+}
+
+#sad-app .sad-preview__label {
+	font-size: 0.85rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	opacity: 0.8;
+}
+
+#sad-app .sad-preview .sad-btn--ghost {
+	color: #f4efe7;
+	border-color: rgba(244, 239, 231, 0.35);
+	background: transparent;
+}
+
+#sad-app .sad-preview .sad-btn--ghost:disabled {
+	opacity: 0.35;
+}
+
+#sad-app .sad-preview__stage {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	perspective: 4000px;
+}
+
+#sad-app .sad-preview .sad-btn--primary {
+	background: var(--sad-select);
+	border-color: var(--sad-select);
+	color: #fff;
+}
+
+#sad-app .sad-preview__hint {
+	margin: 0;
+	font-size: 0.85rem;
+	opacity: 0.75;
+}
+
+#sad-app .sad-book {
+	position: relative;
+	display: flex;
+	box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.3);
+	transform-style: preserve-3d;
+	transition: opacity 0.18s ease;
+}
+
+#sad-app .sad-book--fade {
+	opacity: 0;
+}
+
+#sad-app .sad-book__page {
+	position: relative;
+	overflow: hidden;
+	background: #fff;
+	flex: none;
+}
+
+#sad-app .sad-book__sheet {
+	position: absolute;
+	top: 0;
+	box-shadow: none;
+}
+
+/* The fold shadow in the middle of the book. */
+#sad-app .sad-book__page--left::after,
+#sad-app .sad-book__page--right::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 8%;
+	pointer-events: none;
+}
+
+#sad-app .sad-book__page--left::after {
+	right: 0;
+	background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.16));
+}
+
+#sad-app .sad-book__page--right::after {
+	left: 0;
+	background: linear-gradient(270deg, transparent, rgba(0, 0, 0, 0.16));
+}
+
+#sad-app .sad-leaf {
+	position: absolute;
+	top: 0;
+	transform-style: preserve-3d;
+	transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.3, 1);
+}
+
+#sad-app .sad-leaf--forward {
+	left: 50%;
+	transform-origin: left center;
+}
+
+#sad-app .sad-leaf--back {
+	left: 0;
+	transform-origin: right center;
+}
+
+#sad-app .sad-leaf--forward.sad-leaf--turned {
+	transform: rotateY(-180deg);
+}
+
+#sad-app .sad-leaf--back.sad-leaf--turned {
+	transform: rotateY(180deg);
+}
+
+#sad-app .sad-leaf__face {
+	position: absolute;
+	inset: 0;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+}
+
+#sad-app .sad-leaf__face--back {
+	transform: rotateY(180deg);
+}
+
+#sad-app .sad-btn--pulse {
+	animation: sad-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sad-pulse {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(168, 135, 90, 0.6); }
+	50% { box-shadow: 0 0 0 8px rgba(168, 135, 90, 0); }
+}
+
+@media (max-width: 600px) {
+	#sad-app .sad-preview__bar {
+		gap: 8px;
+		padding: 8px 12px;
+		flex-wrap: wrap;
+	}
+}
+
+/* ---------- v0.7: List, Grid and Preview views ---------- */
+
+#sad-app .sad-views {
+	display: inline-flex;
+	margin-left: auto;
+	border-radius: 6px;
+	overflow: hidden;
+	border: 1px solid var(--sad-line);
+}
+
+#sad-app .sad-views__btn {
+	min-height: 0;
+	padding: 6px 14px;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: var(--sad-muted);
+	font-size: 0.8rem;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+#sad-app .sad-views__btn[aria-pressed="true"] {
+	background: var(--sad-raise, #ece8e1);
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-views__btn::before {
+	content: "";
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	margin-right: 6px;
+	vertical-align: -1px;
+	border: 1.5px solid currentColor;
+	border-radius: 2px;
+}
+
+#sad-app .sad-views__btn--grid::before {
+	background: linear-gradient(currentColor, currentColor) 50% 0 / 1.5px 100% no-repeat, linear-gradient(currentColor, currentColor) 0 50% / 100% 1.5px no-repeat;
+}
+
+#sad-app .sad-views__btn--preview::before {
+	border-radius: 50% / 70%;
+}
+
+#sad-app .sad-stage-wrap {
+	display: block;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+#sad-app.sad-app--full .sad-stage-wrap {
+	padding: 8px 24px 24px;
+	overflow-y: auto;
+}
+
+#sad-app .sad-list {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 26px;
+	padding-top: 44px;
+}
+
+#sad-app .sad-list--preview {
+	padding-top: 8px;
+}
+
+#sad-app .sad-entry {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+}
+
+#sad-app .sad-entry--current {
+	margin-top: 4px;
+}
+
+#sad-app .sad-entry__static {
+	display: block;
+	padding: 0;
+	min-height: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	cursor: pointer;
+	border-radius: 2px;
+	opacity: 0.92;
+	transition: opacity 0.15s ease, outline-color 0.15s ease;
+	outline: 2px solid transparent;
+	outline-offset: 2px;
+}
+
+#sad-app .sad-entry__static:hover {
+	opacity: 1;
+	outline-color: rgba(168, 135, 90, 0.6);
+}
+
+#sad-app .sad-entry__bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 28px;
+}
+
+#sad-app .sad-entry--current .sad-entry__bar {
+	margin-top: 26px;
+}
+
+#sad-app .sad-entry__label {
+	font-size: 0.75rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--sad-muted);
+	margin-right: 6px;
+}
+
+#sad-app .sad-entry__bar .sad-thumb__notes {
+	position: static;
+}
+
+#sad-app .sad-btn--small {
+	min-height: 0;
+	padding: 5px 10px;
+	font-size: 0.78rem;
+}
+
+#sad-app .sad-entry__print .sad-mini,
+#sad-app .sad-entry__static .sad-mini {
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+#sad-app .sad-preview-intro {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+}
+
+#sad-app .sad-grid {
+	display: grid;
+	gap: 34px 28px;
+	justify-content: center;
+	align-items: start;
+	padding: 16px 0 24px;
+}
+
+#sad-app .sad-tile {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	border-radius: 4px;
+	padding: 6px;
+	min-width: 0;
+}
+
+#sad-app .sad-tile[draggable="true"] {
+	cursor: grab;
+}
+
+#sad-app .sad-tile--current {
+	outline: 2px solid var(--sad-select);
+	outline-offset: 2px;
+}
+
+#sad-app .sad-tile--over {
+	background: rgba(168, 135, 90, 0.18);
+}
+
+#sad-app .sad-tile--dragging {
+	opacity: 0.4;
+}
+
+#sad-app .sad-tile__picture {
+	display: block;
+	padding: 0;
+	min-height: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+#sad-app .sad-tile__picture .sad-mini {
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+#sad-app .sad-tile--add {
+	align-self: stretch;
+	justify-content: center;
+	min-height: 120px;
+	border: 1.5px dashed var(--sad-line);
+	background: none;
+	color: var(--sad-muted);
+	cursor: pointer;
+	font-size: 0.85rem;
+}
+
+#sad-app.sad-app--view-grid .sad-strip-section,
+#sad-app.sad-app--view-preview .sad-strip-section {
+	display: none;
+}
+
+/* ---------- v0.7: dark theme, so the photos stand out ---------- */
+
+#sad-app.sad-app--dark {
+	--sad-ink: #ece9e4;
+	--sad-muted: #9a958d;
+	--sad-line: #34343a;
+	--sad-bg: #0b0c10;
+	--sad-panel: #1b1c20;
+	--sad-raise: #2a2b31;
+	--sad-accent: #ece9e4;
+	background: var(--sad-bg);
+	color: var(--sad-ink);
+	color-scheme: dark;
+}
+
+#sad-app.sad-app--dark .sad-header,
+#sad-app.sad-app--dark .sad-side,
+#sad-app.sad-app--dark .sad-tools,
+#sad-app.sad-app--dark.sad-app--full .sad-side,
+#sad-app.sad-app--dark.sad-app--full .sad-tools,
+#sad-app.sad-app--dark .sad-strip-section,
+#sad-app.sad-app--dark.sad-app--full .sad-strip-section,
+#sad-app.sad-app--dark .sad-tabs,
+#sad-app.sad-app--dark .sad-section,
+#sad-app.sad-app--dark .sad-tray-section {
+	background: var(--sad-panel);
+	border-color: var(--sad-line);
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-main,
+#sad-app.sad-app--dark .sad-stage-wrap,
+#sad-app.sad-app--dark.sad-app--full .sad-stage-wrap,
+#sad-app.sad-app--dark .sad-workspace {
+	background: var(--sad-bg);
+}
+
+#sad-app.sad-app--dark .sad-nav {
+	background: none;
+}
+
+#sad-app.sad-app--dark :is(h2, h3, .sad-title, .sad-tools__title, .sad-tools__label, strong) {
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark :is(.sad-help, .sad-size, .sad-status, .sad-count, .sad-spread-label, .sad-thumb__num) {
+	color: var(--sad-muted);
+}
+
+#sad-app.sad-app--dark .sad-btn--ghost,
+#sad-app.sad-app--dark .sad-btn--ghost:hover,
+#sad-app.sad-app--dark .sad-home,
+#sad-app.sad-app--dark .sad-seg__btn,
+#sad-app.sad-app--dark .sad-choice__btn {
+	background: var(--sad-raise);
+	border-color: #3c3d44;
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-btn--ghost:hover:not(:disabled) {
+	background: #34353c;
+}
+
+#sad-app.sad-app--dark .sad-btn--ghost:disabled {
+	opacity: 0.4;
+}
+
+#sad-app.sad-app--dark .sad-btn--danger,
+#sad-app.sad-app--dark .sad-btn--ghost.sad-btn--danger {
+	color: #f08b78;
+}
+
+#sad-app.sad-app--dark .sad-btn--primary,
+#sad-app.sad-app--dark .sad-btn--primary:hover {
+	background: var(--sad-select);
+	border-color: var(--sad-select);
+	color: #fff;
+}
+
+#sad-app.sad-app--dark .sad-seg__btn[aria-pressed="true"],
+#sad-app.sad-app--dark .sad-choice__btn[aria-checked="true"] {
+	background: var(--sad-select);
+	border-color: var(--sad-select);
+	color: #fff;
+}
+
+#sad-app.sad-app--dark .sad-tab {
+	background: none;
+	color: var(--sad-muted);
+}
+
+#sad-app.sad-app--dark .sad-tab[aria-selected="true"] {
+	color: var(--sad-ink);
+	border-color: var(--sad-select);
+}
+
+#sad-app.sad-app--dark :is(.sad-num, .sad-textarea, .sad-select, input[type="number"], input[type="text"], textarea, select) {
+	background: #121317;
+	border-color: #3c3d44;
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-photo,
+#sad-app.sad-app--dark .sad-layout,
+#sad-app.sad-app--dark .sad-template {
+	background: var(--sad-raise);
+	border-color: #3c3d44;
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-layout:hover,
+#sad-app.sad-app--dark .sad-template:hover,
+#sad-app.sad-app--dark .sad-layout--active,
+#sad-app.sad-app--dark .sad-template--active {
+	background: #34353c;
+}
+
+#sad-app.sad-app--dark .sad-layout__icon {
+	background: #121317;
+}
+
+#sad-app.sad-app--dark .sad-layout__box {
+	background: #6a655d;
+}
+
+#sad-app.sad-app--dark .sad-thumb,
+#sad-app.sad-app--dark .sad-thumb:hover {
+	background: none;
+	border-color: transparent;
+	color: var(--sad-muted);
+}
+
+#sad-app.sad-app--dark .sad-thumb--active,
+#sad-app.sad-app--dark .sad-thumb--active:hover {
+	border-color: var(--sad-select);
+}
+
+#sad-app.sad-app--dark .sad-thumb--add {
+	background: var(--sad-raise);
+	border: 1px dashed #4a4b52;
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-legend,
+#sad-app.sad-app--dark .sad-legend span {
+	color: var(--sad-muted);
+}
+
+#sad-app.sad-app--dark .sad-page-labels span {
+	color: var(--sad-muted);
+}
+
+#sad-app.sad-app--dark .sad-banner {
+	background: #24301f;
+	color: #cfe3c4;
+}
+
+#sad-app.sad-app--dark .sad-lowres {
+	background: #3a2a14;
+	color: #f2d39b;
+	border-color: #5a4320;
+}
+
+#sad-app.sad-app--dark .sad-note__text {
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-views {
+	border-color: #3c3d44;
+	background: var(--sad-panel);
+}
+
+#sad-app.sad-app--dark .sad-views__btn[aria-pressed="true"] {
+	background: var(--sad-raise);
+}
+
+#sad-app.sad-app--dark .sad-tile--add {
+	border-color: #4a4b52;
+}
+
+#sad-app.sad-app--dark .sad-stage {
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+
+#sad-app.sad-app--dark .sad-drop-overlay {
+	background: rgba(11, 12, 16, 0.85);
+}
+
+html.sad-locked body,
+html.sad-locked {
+	background: #0b0c10;
+}
+
+#sad-app .sad-entry--current {
+	position: relative;
+	z-index: 2;
+}
+
+#sad-app.sad-app--dark .sad-tools__photo {
+	background: var(--sad-raise);
+	border-color: #3c3d44;
+}
+
+#sad-app.sad-app--dark .sad-float {
+	background: #24252b;
+	border-color: #3c3d44;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+#sad-app.sad-app--dark .sad-float__btn {
+	background: none;
+	color: var(--sad-ink);
+}
+
+#sad-app.sad-app--dark .sad-float__btn:hover,
+#sad-app.sad-app--dark .sad-float__btn[aria-pressed="true"] {
+	background: #34353c;
+}
