@@ -9,26 +9,56 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Pixel sizes for one spread at the export resolution. A spread is two pages side by side,
- * plus bleed on all four outside edges.
+ * Sizes in mm of a spread, or of the printed cover. A spread is two pages side by side; the cover
+ * is back cover, spine and front cover, with the spine growing with the number of spreads (from the
+ * printer specs in Settings). tw x th is the trimmed size, b the bleed (the wrap, for the cover) on
+ * each edge. Matches geo() in editor.js.
  */
-function sad_spread_geometry( $album_id ) {
+function sad_mm_geometry( $album_id, $is_cover = false, $spread_count = 0 ) {
 	$settings = sad_get_settings();
 	$size     = sad_album_config( $album_id )['size'];
+	$page_w   = (float) $size['width_mm'];
+	$spine    = 0.0;
+	$bleed    = (float) $settings['bleed_mm'];
+	if ( $is_cover ) {
+		$spine = round( (float) $settings['spine_base_mm'] + (float) $settings['spine_per_spread_mm'] * $spread_count, 1 );
+		$bleed = (float) $settings['cover_wrap_mm'] > 0 ? (float) $settings['cover_wrap_mm'] : $bleed;
+	}
+	return array(
+		'tw'     => 2 * $page_w + $spine,
+		'th'     => (float) $size['height_mm'],
+		'b'      => $bleed,
+		'page_w' => $page_w,
+		'spine'  => $spine,
+	);
+}
+
+/**
+ * Pixel sizes for one spread (or the cover when $index is "cover") at the export resolution,
+ * bleed included on all four outside edges.
+ */
+function sad_spread_geometry( $album_id, $index = null ) {
+	$settings = sad_get_settings();
 	$dpi      = (int) $settings['dpi'];
 	$mm       = $dpi / 25.4;
+	$is_cover = 'cover' === $index;
+	$g        = sad_mm_geometry( $album_id, $is_cover, $is_cover ? count( sad_get_design( $album_id )['spreads'] ) : 0 );
 
-	$trim_w = (int) round( $size['width_mm'] * 2 * $mm );
-	$trim_h = (int) round( $size['height_mm'] * $mm );
-	$bleed  = (int) round( (float) $settings['bleed_mm'] * $mm );
+	$trim_w = (int) round( $g['tw'] * $mm );
+	$trim_h = (int) round( $g['th'] * $mm );
+	$bleed  = (int) round( $g['b'] * $mm );
 
 	return array(
 		'dpi'      => $dpi,
+		'mm'       => $mm,
 		'bleed'    => $bleed,
 		'trim_w'   => $trim_w,
 		'trim_h'   => $trim_h,
 		'canvas_w' => $trim_w + 2 * $bleed,
 		'canvas_h' => $trim_h + 2 * $bleed,
+		'spine_mm' => $g['spine'],
+		'width_mm' => $g['tw'] + 2 * $g['b'],
+		'height_mm'=> $g['th'] + 2 * $g['b'],
 	);
 }
 
@@ -100,12 +130,12 @@ function sad_render_spread_file( $album_id, $index ) {
 		set_time_limit( 300 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions
 	}
 
-	$geo    = sad_spread_geometry( $album_id );
+	$geo    = sad_spread_geometry( $album_id, $index );
 	$photos = sad_get_photos( $album_id );
 
 	$largest = 0;
 	foreach ( $spread['items'] as $item ) {
-		if ( $item['photo'] && isset( $photos[ $item['photo'] ] ) ) {
+		if ( ! empty( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ) {
 			$box     = $item['w'] * $geo['trim_w'] * $item['h'] * $geo['trim_h'] * ( $item['rot'] ? 3 : 0 );
 			$largest = max( $largest, $photos[ $item['photo'] ]['width'] * $photos[ $item['photo'] ]['height'] + $box );
 		}
@@ -119,12 +149,17 @@ function sad_render_spread_file( $album_id, $index ) {
 	}
 
 	$canvas = imagecreatetruecolor( $geo['canvas_w'], $geo['canvas_h'] );
-	imagefill( $canvas, 0, 0, imagecolorallocate( $canvas, 255, 255, 255 ) );
+	list( $r, $g, $b ) = sad_hex_rgb( $spread['bg'] ? $spread['bg'] : '#ffffff' );
+	imagefill( $canvas, 0, 0, imagecolorallocate( $canvas, $r, $g, $b ) );
 	imagealphablending( $canvas, true );
 
 	// Boxes are drawn in order, so later ones sit on top.
 	foreach ( $spread['items'] as $item ) {
-		if ( ! $item['photo'] || ! isset( $photos[ $item['photo'] ] ) ) {
+		if ( 'text' === $item['type'] ) {
+			sad_draw_text( $canvas, $item, $geo );
+			continue;
+		}
+		if ( empty( $item['photo'] ) || ! isset( $photos[ $item['photo'] ] ) ) {
 			continue;
 		}
 		$photo = $photos[ $item['photo'] ];
@@ -285,10 +320,18 @@ function sad_build_package( $album_id ) {
 		}
 	}
 
-	$points_w = $geo['canvas_w'] / $geo['dpi'] * 72;
-	$points_h = $geo['canvas_h'] / $geo['dpi'] * 72;
-	$bleed_pt = $geo['bleed'] / $geo['dpi'] * 72;
-	$pdf      = sad_write_jpeg_pdf( $dir . '/' . $base . '.pdf', $files, $points_w, $points_h, $bleed_pt, sad_album_title( $album_id ) );
+	// Page sizes in points, bleed included. A printed cover with a spine and wrap is bigger than a spread.
+	$pages = array();
+	foreach ( $files as $file ) {
+		$page_geo = $file === $cover ? sad_spread_geometry( $album_id, 'cover' ) : $geo;
+		$pages[]  = array(
+			'file'   => $file,
+			'width'  => $page_geo['canvas_w'] / $page_geo['dpi'] * 72,
+			'height' => $page_geo['canvas_h'] / $page_geo['dpi'] * 72,
+			'bleed'  => $page_geo['bleed'] / $page_geo['dpi'] * 72,
+		);
+	}
+	$pdf = sad_write_jpeg_pdf( $dir . '/' . $base . '.pdf', $pages, sad_album_title( $album_id ) );
 	if ( is_wp_error( $pdf ) ) {
 		return $pdf;
 	}
@@ -341,4 +384,13 @@ function sad_export_links( $album_id ) {
 		'links'      => $links,
 		'exportedAt' => (int) get_post_meta( $album_id, '_sad_exported_at', true ),
 	);
+}
+
+function sad_hex_rgb( $hex ) {
+	$hex = ltrim( (string) $hex, '#' );
+	if ( 3 === strlen( $hex ) ) {
+		$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+	}
+	$n = hexdec( str_pad( substr( $hex, 0, 6 ), 6, '0' ) );
+	return array( ( $n >> 16 ) & 255, ( $n >> 8 ) & 255, $n & 255 );
 }

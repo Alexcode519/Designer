@@ -51,6 +51,24 @@ function sad_register_routes() {
 	);
 	register_rest_route(
 		SAD_REST_NS,
+		$token . '/comments',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'sad_rest_add_comment',
+			'permission_callback' => '__return_true',
+		)
+	);
+	register_rest_route(
+		SAD_REST_NS,
+		$token . '/comments/(?P<comment>[a-z0-9]{10})',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'sad_rest_resolve_comment',
+			'permission_callback' => '__return_true',
+		)
+	);
+	register_rest_route(
+		SAD_REST_NS,
 		$token . '/approve',
 		array(
 			'methods'             => 'POST',
@@ -69,6 +87,33 @@ function sad_register_routes() {
 		array(
 			'methods'             => 'POST',
 			'callback'            => 'sad_rest_admin_render',
+			'permission_callback' => $can,
+		)
+	);
+	register_rest_route(
+		SAD_REST_NS,
+		$admin . '/photos',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'sad_rest_admin_upload_chunk',
+			'permission_callback' => $can,
+		)
+	);
+	register_rest_route(
+		SAD_REST_NS,
+		$admin . '/comments',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'sad_rest_admin_add_comment',
+			'permission_callback' => $can,
+		)
+	);
+	register_rest_route(
+		SAD_REST_NS,
+		$admin . '/comments/(?P<comment>[a-z0-9]{10})',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'sad_rest_admin_resolve_comment',
 			'permission_callback' => $can,
 		)
 	);
@@ -124,6 +169,20 @@ function sad_client_payload( $album_id ) {
 		'bleedMm'    => (float) $settings['bleed_mm'],
 		'safeMm'     => (float) $settings['safe_mm'],
 		'covers'     => sad_cover_materials(),
+		'fonts'      => sad_fonts_for_client(),
+		'printer'    => array(
+			'coverWrapMm'      => (float) $settings['cover_wrap_mm'],
+			'spineBaseMm'      => (float) $settings['spine_base_mm'],
+			'spinePerSpreadMm' => (float) $settings['spine_per_spread_mm'],
+			'spreadStep'       => (int) $settings['spread_step'],
+		),
+		'pricing'    => array(
+			'currency'         => $settings['currency'],
+			'includedSpreads'  => (int) $settings['included_spreads'],
+			'extraSpreadPrice' => (float) $settings['extra_spread_price'],
+		),
+		'studio'     => get_bloginfo( 'name' ),
+		'comments'   => sad_get_comments( $album_id ),
 		'photos'     => $photos,
 		'design'     => sad_get_design( $album_id ),
 	);
@@ -154,6 +213,14 @@ function sad_rest_upload_chunk( WP_REST_Request $request ) {
 	if ( is_wp_error( $album ) ) {
 		return $album;
 	}
+	return sad_rest_receive_upload( $album->ID, $request );
+}
+
+/**
+ * Takes one piece of a photo upload, from the client or from the studio in WordPress.
+ */
+function sad_rest_receive_upload( $album_id, WP_REST_Request $request ) {
+	$album = get_post( $album_id );
 	$files = $request->get_file_params();
 	if ( empty( $files['chunk']['tmp_name'] ) || ! is_uploaded_file( $files['chunk']['tmp_name'] ) ) {
 		return new WP_Error( 'sad_bad_upload', 'No file received. The photo may be larger than the server allows.', array( 'status' => 400 ) );
@@ -176,6 +243,55 @@ function sad_rest_upload_chunk( WP_REST_Request $request ) {
 			'photo' => $result ? sad_photo_for_client( $album->ID, $result ) : null,
 		)
 	);
+}
+
+function sad_rest_admin_upload_chunk( WP_REST_Request $request ) {
+	return sad_rest_receive_upload( (int) $request['id'], $request );
+}
+
+function sad_rest_add_comment( WP_REST_Request $request ) {
+	$album = sad_rest_album( $request );
+	if ( is_wp_error( $album ) ) {
+		return $album;
+	}
+	if ( ! sad_rate_limit_ok( 'note', 60 ) ) {
+		return new WP_Error( 'sad_busy', 'Too many notes in a short time. Please wait a little and try again.', array( 'status' => 429 ) );
+	}
+	$params  = $request->get_json_params();
+	$comment = sad_add_comment( $album->ID, (string) ( $params['spread'] ?? '' ), 'client', (string) ( $params['text'] ?? '' ) );
+	if ( is_wp_error( $comment ) ) {
+		return $comment;
+	}
+	return rest_ensure_response( array( 'comments' => sad_get_comments( $album->ID ) ) );
+}
+
+function sad_rest_resolve_comment( WP_REST_Request $request ) {
+	$album = sad_rest_album( $request );
+	if ( is_wp_error( $album ) ) {
+		return $album;
+	}
+	if ( ! sad_set_comment_resolved( $album->ID, $request['comment'], ! empty( $request->get_json_params()['resolved'] ) ) ) {
+		return new WP_Error( 'sad_not_found', 'Note not found.', array( 'status' => 404 ) );
+	}
+	return rest_ensure_response( array( 'comments' => sad_get_comments( $album->ID ) ) );
+}
+
+function sad_rest_admin_add_comment( WP_REST_Request $request ) {
+	$album_id = (int) $request['id'];
+	$params   = $request->get_json_params();
+	$comment  = sad_add_comment( $album_id, (string) ( $params['spread'] ?? '' ), 'studio', (string) ( $params['text'] ?? '' ) );
+	if ( is_wp_error( $comment ) ) {
+		return $comment;
+	}
+	return rest_ensure_response( array( 'comments' => sad_get_comments( $album_id ) ) );
+}
+
+function sad_rest_admin_resolve_comment( WP_REST_Request $request ) {
+	$album_id = (int) $request['id'];
+	if ( ! sad_set_comment_resolved( $album_id, $request['comment'], ! empty( $request->get_json_params()['resolved'] ) ) ) {
+		return new WP_Error( 'sad_not_found', 'Note not found.', array( 'status' => 404 ) );
+	}
+	return rest_ensure_response( array( 'comments' => sad_get_comments( $album_id ) ) );
 }
 
 function sad_rest_delete_photo( WP_REST_Request $request ) {

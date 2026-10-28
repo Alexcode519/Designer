@@ -94,7 +94,9 @@ function sad_album_config( $album_id ) {
  * trimmed spread (both pages side by side), so a box can run out into the bleed with values
  * below 0 or above 1. rot is degrees clockwise around the box centre. With fit "fill" the photo
  * covers the box, enlarged by zoom, and px/py (0 to 1) choose which part of the overflow shows;
- * with "fit" the whole photo shows, centred.
+ * with "fit" the whole photo shows, centred. A text box has type "text" (see sad_sanitize_text_item()).
+ * Each spread also has an id that stays the same when spreads are moved (comments use it) and a
+ * background colour, bg ("" for white).
  */
 function sad_get_design( $album_id ) {
 	$design = json_decode( (string) get_post_meta( $album_id, '_sad_design', true ), true );
@@ -104,9 +106,16 @@ function sad_get_design( $album_id ) {
 		for ( $i = 0; $i < $config['min_spreads']; $i++ ) {
 			$spreads[] = array( 'layout' => 'two-full', 'items' => sad_layout_items( $album_id, 'two-full' ) );
 		}
-		$design = array( 'spreads' => $spreads );
+		$design = array( 'cover' => $design['cover'] ?? null, 'spreads' => $spreads );
 	}
-	return sad_sanitize_design( $album_id, $design );
+	$clean = sad_sanitize_design( $album_id, $design );
+	// Keep the spread ids that were just given out (new album, or saved before spreads had ids).
+	if ( wp_list_pluck( $clean['spreads'], 'id' ) !== array_map( function ( $spread ) {
+		return $spread['id'] ?? null;
+	}, array_slice( $design['spreads'], 0, count( $clean['spreads'] ) ) ) ) {
+		update_post_meta( $album_id, '_sad_design', wp_slash( wp_json_encode( $clean ) ) );
+	}
+	return $clean;
 }
 
 /**
@@ -120,6 +129,7 @@ function sad_bleed_fractions( $album_id ) {
 
 function sad_new_item( $photo, $x, $y, $w, $h ) {
 	return array(
+		'type'  => 'photo',
 		'photo' => $photo,
 		'x'     => $x,
 		'y'     => $y,
@@ -167,20 +177,28 @@ function sad_sanitize_items( $album_id, $items_in, $photos = null ) {
 		if ( ! is_array( $item ) ) {
 			continue;
 		}
-		$photo = isset( $item['photo'] ) && is_string( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ? $item['photo'] : null;
-		$rot   = fmod( (float) ( $item['rot'] ?? 0 ), 360 );
-		if ( $rot > 180 ) {
-			$rot -= 360;
-		} elseif ( $rot <= -180 ) {
-			$rot += 360;
+		if ( isset( $item['type'] ) && 'text' === $item['type'] ) {
+			$items[] = array_merge(
+				sad_sanitize_text_item( $item ),
+				array(
+					'x'   => sad_clamp( $item['x'] ?? 0, -1, 2 ),
+					'y'   => sad_clamp( $item['y'] ?? 0, -1, 2 ),
+					'w'   => sad_clamp( $item['w'] ?? 0.25, 0.005, 2 ),
+					'h'   => sad_clamp( $item['h'] ?? 0.1, 0.005, 2 ),
+					'rot' => sad_clean_rotation( $item['rot'] ?? 0 ),
+				)
+			);
+			continue;
 		}
+		$photo = isset( $item['photo'] ) && is_string( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ? $item['photo'] : null;
 		$items[] = array(
+			'type'  => 'photo',
 			'photo' => $photo,
 			'x'     => sad_clamp( $item['x'] ?? 0, -1, 2 ),
 			'y'     => sad_clamp( $item['y'] ?? 0, -1, 2 ),
 			'w'     => sad_clamp( $item['w'] ?? 0.25, 0.005, 2 ),
 			'h'     => sad_clamp( $item['h'] ?? 0.25, 0.005, 2 ),
-			'rot'   => round( $rot, 2 ),
+			'rot'   => sad_clean_rotation( $item['rot'] ?? 0 ),
 			'fit'   => isset( $item['fit'] ) && 'fit' === $item['fit'] ? 'fit' : 'fill',
 			'zoom'  => sad_clamp( $item['zoom'] ?? 1, 1, 5 ),
 			'px'    => sad_clamp( $item['px'] ?? 0.5, 0, 1 ),
@@ -190,11 +208,33 @@ function sad_sanitize_items( $album_id, $items_in, $photos = null ) {
 	return $items;
 }
 
+/**
+ * Degrees, from -180 to 180.
+ */
+function sad_clean_rotation( $rot ) {
+	$rot = fmod( (float) $rot, 360 );
+	if ( $rot > 180 ) {
+		$rot -= 360;
+	} elseif ( $rot <= -180 ) {
+		$rot += 360;
+	}
+	return round( $rot, 2 );
+}
+
+function sad_clean_colour( $value ) {
+	return is_string( $value ) && preg_match( '/^#[0-9a-f]{6}$/i', $value ) ? strtolower( $value ) : '';
+}
+
+function sad_new_spread_id() {
+	return strtolower( wp_generate_password( 8, false, false ) );
+}
+
 function sad_sanitize_design( $album_id, $design ) {
 	$layouts = sad_layouts();
 	$photos  = sad_get_photos( $album_id );
 	$config  = sad_album_config( $album_id );
 	$spreads = array();
+	$seen    = array();
 
 	foreach ( (array) ( $design['spreads'] ?? array() ) as $spread ) {
 		if ( count( $spreads ) >= $config['max_spreads'] ) {
@@ -215,8 +255,15 @@ function sad_sanitize_design( $album_id, $design ) {
 			$spread['items'] = $items;
 		}
 
-		$items     = sad_sanitize_items( $album_id, $spread['items'] ?? array(), $photos );
-		$spreads[] = array( 'layout' => $layout, 'items' => $items );
+		$id = isset( $spread['id'] ) && is_string( $spread['id'] ) && preg_match( '/^[a-z0-9]{8}$/', $spread['id'] ) && ! isset( $seen[ $spread['id'] ] ) ? $spread['id'] : sad_new_spread_id();
+		$seen[ $id ] = true;
+		$items       = sad_sanitize_items( $album_id, $spread['items'] ?? array(), $photos );
+		$spreads[]   = array(
+			'id'     => $id,
+			'layout' => $layout,
+			'bg'     => sad_clean_colour( $spread['bg'] ?? '' ),
+			'items'  => $items,
+		);
 	}
 
 	return array(
@@ -229,6 +276,7 @@ function sad_save_design( $album_id, $design ) {
 	$clean = sad_sanitize_design( $album_id, $design );
 	update_post_meta( $album_id, '_sad_design', wp_slash( wp_json_encode( $clean ) ) );
 	update_post_meta( $album_id, '_sad_updated_at', time() );
+	delete_post_meta( $album_id, '_sad_reminders_sent' );
 	return $clean;
 }
 
@@ -241,26 +289,80 @@ function sad_design_problems( $album_id, $design ) {
 	if ( count( $design['spreads'] ) < $config['min_spreads'] ) {
 		$problems[] = sprintf( 'Your album needs at least %d spreads.', $config['min_spreads'] );
 	}
+	$step = (int) sad_get_settings()['spread_step'];
+	if ( $step > 1 && count( $design['spreads'] ) % $step ) {
+		$problems[] = sprintf( 'The number of spreads must be a multiple of %d.', $step );
+	}
 	if ( sad_cover_is_printed( $design['cover'] ) ) {
 		if ( ! $design['cover']['items'] ) {
 			$problems[] = 'The printed cover has no photos.';
-		} elseif ( array_filter( wp_list_pluck( $design['cover']['items'], 'photo' ) ) !== wp_list_pluck( $design['cover']['items'], 'photo' ) ) {
+		} elseif ( sad_has_empty_box( $design['cover'] ) ) {
 			$problems[] = 'The cover has an empty photo box.';
 		}
 	}
 	foreach ( $design['spreads'] as $n => $spread ) {
 		if ( ! $spread['items'] ) {
 			$problems[] = sprintf( 'Spread %d is blank.', $n + 1 );
-			continue;
-		}
-		foreach ( $spread['items'] as $item ) {
-			if ( ! $item['photo'] ) {
-				$problems[] = sprintf( 'Spread %d has an empty photo box.', $n + 1 );
-				break;
-			}
+		} elseif ( sad_has_empty_box( $spread ) ) {
+			$problems[] = sprintf( 'Spread %d has an empty photo box.', $n + 1 );
 		}
 	}
 	return $problems;
+}
+
+function sad_has_empty_box( $spread ) {
+	foreach ( $spread['items'] as $item ) {
+		if ( 'photo' === $item['type'] && ! $item['photo'] ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Extras the client has chosen beyond the standard album, with prices from Settings.
+ *
+ * @return array( 'lines' => array( array( 'label', 'amount' ) ), 'total' => float )
+ */
+function sad_album_extras( $album_id, $design = null ) {
+	$design   = $design ? $design : sad_get_design( $album_id );
+	$settings = sad_get_settings();
+	$lines    = array();
+	$extra    = count( $design['spreads'] ) - (int) $settings['included_spreads'];
+	if ( $extra > 0 && (float) $settings['extra_spread_price'] > 0 ) {
+		$lines[] = array(
+			'label'  => sprintf( '%d extra spread%s', $extra, 1 === $extra ? '' : 's' ),
+			'amount' => $extra * (float) $settings['extra_spread_price'],
+		);
+	}
+	$material = sad_cover_materials()[ $design['cover']['type'] ] ?? null;
+	if ( $material && $material['price'] > 0 ) {
+		$lines[] = array( 'label' => $material['name'] . ' cover', 'amount' => (float) $material['price'] );
+	}
+	return array(
+		'lines' => $lines,
+		'total' => array_sum( wp_list_pluck( $lines, 'amount' ) ),
+	);
+}
+
+function sad_money( $amount ) {
+	$currency = sad_get_settings()['currency'];
+	return $currency . number_format( (float) $amount, floor( $amount ) == $amount ? 0 : 2, '.', ',' ); // phpcs:ignore Universal.Operators.StrictComparisons
+}
+
+/**
+ * The extras in words for emails and the admin screen, or "" when there are none.
+ */
+function sad_extras_text( $album_id, $design = null ) {
+	$extras = sad_album_extras( $album_id, $design );
+	if ( ! $extras['lines'] ) {
+		return '';
+	}
+	$text = '';
+	foreach ( $extras['lines'] as $line ) {
+		$text .= $line['label'] . ': ' . sad_money( $line['amount'] ) . "\n";
+	}
+	return $text . 'Total extras: ' . sad_money( $extras['total'] ) . "\n";
 }
 
 function sad_approve_album( $album_id ) {
@@ -276,10 +378,12 @@ function sad_approve_album( $album_id ) {
 		$to,
 		sprintf( 'Album approved: %s', sad_album_title( $album_id ) ),
 		sprintf(
-			"%s has approved their album design \"%s\".\n\nCover: %s\n\nOpen it to download the print files:\n%s\n",
+			"%s has approved their album design \"%s\".\n\nCover: %s\nSpreads: %d\n%s\nOpen it to download the print files:\n%s\n",
 			$client ? $client : 'Your client',
 			sad_album_title( $album_id ),
 			sad_cover_label( sad_get_design( $album_id )['cover'] ),
+			count( sad_get_design( $album_id )['spreads'] ),
+			sad_extras_text( $album_id ) ? "\nExtras chosen:\n" . sad_extras_text( $album_id ) : '',
 			$edit
 		)
 	);

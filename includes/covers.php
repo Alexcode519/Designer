@@ -11,6 +11,7 @@ defined( 'ABSPATH' ) || exit;
  * The cover types set up in Settings, one per line:
  *   "Name | printed"                         a printed cover the client designs with photos
  *   "Name | Colour #hex, Colour #hex, ..."   a bound cover (leather, linen...) in those colours
+ * An optional third part is the upgrade price, e.g. "Leather | Black #1c1a19 | 800".
  */
 function sad_default_cover_text() {
 	return implode(
@@ -27,7 +28,7 @@ function sad_default_cover_text() {
 function sad_parse_cover_types( $text ) {
 	$types = array();
 	foreach ( preg_split( '/\r\n|\r|\n/', (string) $text ) as $line ) {
-		$parts = array_map( 'trim', explode( '|', $line, 2 ) );
+		$parts = array_map( 'trim', explode( '|', $line, 3 ) );
 		$name  = sanitize_text_field( $parts[0] );
 		$id    = sanitize_title( $name );
 		if ( '' === $id || isset( $types[ $id ] ) ) {
@@ -49,6 +50,7 @@ function sad_parse_cover_types( $text ) {
 			// Fabric-like names get a woven texture in the editor; everything else looks like leather.
 			'texture' => preg_match( '/linen|fabric|cloth|canvas|velvet|silk|buckram/i', $name ) ? 'linen' : 'leather',
 			'colours' => $colours,
+			'price'   => isset( $parts[2] ) ? max( 0, (float) preg_replace( '/[^0-9.]/', '', $parts[2] ) ) : 0,
 		);
 	}
 	return $types;
@@ -66,7 +68,7 @@ function sad_cover_materials() {
 	/**
 	 * Filters the cover types and colours clients can choose from.
 	 *
-	 * @param array $types Type id => array( 'name', 'printed' => bool, 'texture' => 'leather'|'linen', 'colours' => colour id => array( 'name', 'hex' ) ).
+	 * @param array $types Type id => array( 'name', 'printed' => bool, 'texture' => 'leather'|'linen', 'colours' => colour id => array( 'name', 'hex' ), 'price' => float ).
 	 */
 	return apply_filters( 'sad_cover_materials', $types );
 }
@@ -97,6 +99,11 @@ function sad_sanitize_cover( $album_id, $cover ) {
 		'type'   => $type,
 		'colour' => $colour,
 		'items'  => sad_sanitize_items( $album_id, $cover['items'] ?? array() ),
+		// The spine and wrap the editor last laid the cover out with.
+		'spec'   => array(
+			'spine' => round( sad_clamp( $cover['spec']['spine'] ?? 0, 0, 200 ), 2 ),
+			'b'     => round( sad_clamp( $cover['spec']['b'] ?? sad_get_settings()['bleed_mm'], 0, 100 ), 2 ),
+		),
 	);
 }
 
@@ -120,9 +127,7 @@ function sad_set_album_cover_type( $album_id, $type ) {
 	$design['cover']['type']   = $type;
 	$design['cover']['colour'] = '';
 	if ( $materials[ $type ]['printed'] && ! $design['cover']['items'] ) {
-		// Start with one photo box on the front cover.
-		list( $bx, $by )          = sad_bleed_fractions( $album_id );
-		$design['cover']['items'] = array( sad_new_item( null, 0.5, -$by, 0.5 + $bx, 1 + 2 * $by ) );
+		$design['cover']['items'] = array( sad_cover_front_item( $album_id, count( $design['spreads'] ) ) );
 	}
 	sad_save_design( $album_id, $design );
 }
@@ -138,4 +143,13 @@ function sad_cover_label( $cover ) {
 	}
 	$colour = $material['colours'][ $cover['colour'] ]['name'] ?? '';
 	return $material['name'] . ( $colour ? ', ' . $colour : '' );
+}
+
+/**
+ * An empty photo box covering the front cover, out to the wrap. Matches frontCoverItem() in editor.js.
+ */
+function sad_cover_front_item( $album_id, $spread_count ) {
+	$g = sad_mm_geometry( $album_id, true, $spread_count );
+	$x = ( $g['page_w'] + $g['spine'] ) / $g['tw'];
+	return sad_new_item( null, $x, -$g['b'] / $g['th'], 1 + $g['b'] / $g['tw'] - $x, 1 + 2 * $g['b'] / $g['th'] );
 }

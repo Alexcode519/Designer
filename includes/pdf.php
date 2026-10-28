@@ -7,15 +7,13 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * @param string   $path     Where to write the PDF.
- * @param string[] $jpegs    JPEG files, one per page, in order.
- * @param float    $width    Page width in points, bleed included.
- * @param float    $height   Page height in points, bleed included.
- * @param float    $bleed    Bleed per edge in points.
- * @param string   $title    Document title.
+ * @param string $path  Where to write the PDF.
+ * @param array  $pages One per page, in order: array( 'file' => JPEG path, 'width', 'height' (points,
+ *                      bleed included), 'bleed' (points per edge) ).
+ * @param string $title Document title.
  * @return true|WP_Error
  */
-function sad_write_jpeg_pdf( $path, $jpegs, $width, $height, $bleed, $title ) {
+function sad_write_jpeg_pdf( $path, $pages, $title ) {
 	$out = fopen( $path, 'wb' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 	if ( ! $out ) {
 		return new WP_Error( 'sad_pdf_failed', 'Could not create the PDF file.', array( 'status' => 500 ) );
@@ -38,7 +36,7 @@ function sad_write_jpeg_pdf( $path, $jpegs, $width, $height, $bleed, $title ) {
 	$write( "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n" );
 
 	// Objects: 1 catalog, 2 pages, 3 info, then three per page (page, content, image).
-	$count    = count( $jpegs );
+	$count    = count( $pages );
 	$page_ids = array();
 	for ( $i = 0; $i < $count; $i++ ) {
 		$page_ids[] = 4 + $i * 3;
@@ -54,10 +52,14 @@ function sad_write_jpeg_pdf( $path, $jpegs, $width, $height, $bleed, $title ) {
 	$begin( 3 );
 	$write( '<< /Title ' . sad_pdf_string( $title ) . ' /Producer (Snippets Album Designer) /CreationDate (D:' . gmdate( 'YmdHis' ) . "Z) >>\nendobj\n" );
 
-	$media = '[0 0 ' . $num( $width ) . ' ' . $num( $height ) . ']';
-	$trim  = '[' . $num( $bleed ) . ' ' . $num( $bleed ) . ' ' . $num( $width - $bleed ) . ' ' . $num( $height - $bleed ) . ']';
+	foreach ( $pages as $i => $page ) {
+		$jpeg   = $page['file'];
+		$width  = $page['width'];
+		$height = $page['height'];
+		$bleed  = $page['bleed'];
+		$media  = '[0 0 ' . $num( $width ) . ' ' . $num( $height ) . ']';
+		$trim   = '[' . $num( $bleed ) . ' ' . $num( $bleed ) . ' ' . $num( $width - $bleed ) . ' ' . $num( $height - $bleed ) . ']';
 
-	foreach ( $jpegs as $i => $jpeg ) {
 		$info = getimagesize( $jpeg );
 		$data = file_get_contents( $jpeg ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 		if ( ! $info || IMAGETYPE_JPEG !== $info[2] || false === $data ) {

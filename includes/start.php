@@ -252,7 +252,7 @@ function sad_render_start_page() {
 							<span class="sad-cover-option__swatch sad-material--<?php echo esc_attr( $material['printed'] ? 'printed' : $material['texture'] ); ?>" style="<?php echo $material['colours'] ? 'background-color:' . esc_attr( reset( $material['colours'] )['hex'] ) : ''; ?>" aria-hidden="true"></span>
 							<span class="sad-cover-option__text">
 								<strong><?php echo esc_html( $material['name'] ); ?></strong>
-								<span class="sad-help"><?php echo esc_html( $material['printed'] ? 'Printed with your own photos' : sprintf( '%d colours', count( $material['colours'] ) ) ); ?></span>
+								<span class="sad-help"><?php echo esc_html( ( $material['printed'] ? 'Printed with your own photos' : sprintf( '%d colours', count( $material['colours'] ) ) ) . ( $material['price'] > 0 ? ' · +' . sad_money( $material['price'] ) : '' ) ); ?></span>
 							</span>
 						</label>
 					<?php endforeach; ?>

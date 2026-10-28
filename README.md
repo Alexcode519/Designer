@@ -23,6 +23,11 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
 - Adds, deletes and reorders spreads, within the minimum and maximum you set.
 - Sees a warning on a photo, and under the spread, when it is enlarged too much to print sharply.
+- Adds text with **+ Text**: six bundled fonts (serif, fine, clean, modern, two scripts), size, colour, alignment and rotation. Side handles change the width and re-wrap the words; corner handles make the text bigger or smaller. The print file uses the same fonts and line breaks.
+- Sets a background colour on any spread or printed cover (or on every spread at once).
+- Leaves notes on any spread or the cover for you, and sees your notes and replies there. Spreads with open notes show a badge.
+- Turns the pages in **Preview book**, a full-screen flip-through of the cover and every spread. The first time they approve, the preview opens so they look through the whole album before approving at the end.
+- Sees the number of spreads and pages, the cover, and any extras with prices (extra spreads beyond those included, cover upgrades). Nothing is charged.
 - Everything saves automatically. Clicking **Approve for printing** locks the album.
 
 **For you:**
@@ -30,8 +35,10 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - See every client under **Client albums**: names, email, status, size, photos, spreads and when they last worked on it. Sort by **Last change** to see who's active.
 - Get an email when a client starts an album and when they approve. The client gets a confirmation email too.
 - Optionally set an **access code** in Settings so only clients you give it to can start an album.
-- Create an album yourself under **Client albums > Add client album** if you prefer.
-- Click **Build print files** to get a PDF and a ZIP of JPEG spreads at 300 dpi, with 3 mm bleed on every edge. The PDF has the trim and bleed boxes set. A printed photo cover comes first, at the same size as a spread; for leather and linen covers the album page and the approval email show the material and colour to order.
+- Create an album yourself under **Client albums > Add client album** if you prefer, and load the client's photos into it from the **Photos** box on the album page, so they only have to design.
+- Read and answer the client's notes in the **Notes on spreads** box (the client gets an email; you get one when they leave a note, at most one per 15 minutes per album). Open notes show in the album list.
+- Clients who have not finished get a friendly reminder email after a set number of days without changes (Settings > Reminders; default 7 days, up to 2 reminders).
+- Click **Build print files** to get a PDF and a ZIP of JPEG spreads at 300 dpi, with 3 mm bleed on every edge. The PDF has the trim and bleed boxes set. A printed photo cover comes first, sized from the printer specs in Settings (back cover, spine and front cover plus the wrap); for leather and linen covers the album page and the approval email show the material and colour to order.
 - Click **Unlock for changes** if a client needs to edit an approved album.
 
 ## Install
@@ -43,6 +50,15 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 5. Link to the Album Designer page from wherever you send clients (an email, your booking confirmation or a button on a private page).
 
 To update the plugin later, upload the new ZIP the same way and choose **Replace current with uploaded**. Albums and photos are kept.
+
+## Printer specs, reminders and prices
+
+Under **Client albums > Settings**:
+
+- **Spreads come in steps of**: e.g. 2 if your printer only binds an even number of spreads. Clients cannot approve until the count fits, and auto-fill rounds up.
+- **Printed cover**: the wrap (mm past the trim on each edge, bleed included) and the spine width (a base plus mm per spread). Leave at 0 to make the cover the same size as a spread.
+- **Reminders**: days without changes before a reminder, and how many to send. 0 days turns them off.
+- **Extras and prices**: currency, spreads included and the price per extra spread. Add an upgrade price to a cover type as a third part, e.g. `Leather | Black #1c1a19 | 800`. Prices at 0 are hidden.
 
 ## Cover types
 
@@ -79,8 +95,6 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 
 ## Not in this first version
 
-- Text on pages (planned next)
-- Background colours other than white (planned next)
 - Image adjustments such as borders, brightness and opacity
 - Taking payment for upgrades or extra spreads
 
@@ -89,5 +103,7 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 - PHP 7.4+, WordPress 6.2+, with the GD image library (standard on most hosts). No build step.
 - `includes/render.php` and `assets/editor.js` share the crop and rotation logic. If you change one, change the other.
 - Designs saved by version 0.2 and earlier (fixed layout spaces) are converted to photo boxes automatically when opened.
-- Covers are drawn at spread size for now. If your printer needs a different cover size (wrap and spine), that needs adding as a cover size setting.
+- Printed covers use `sad_mm_geometry()` (PHP) and `geo()` (JS): back cover + spine + front cover, with the cover wrap as bleed. The editor saves the spine and wrap it laid the cover out with (`cover.spec`) and moves the boxes when Settings change.
+- Text: the editor wraps lines by measuring with the bundled fonts and saves them; `sad_draw_text()` draws the same lines on the same baselines with FreeType. Fonts are in `assets/fonts` (SIL Open Font License); `sad_fonts` filters the list.
+- Reminders run on WP-Cron (`sad_daily`). On a quiet site, WP-Cron only runs when someone visits; a real cron job calling `wp-cron.php` makes them punctual.
 - Filters: `sad_cover_materials` changes the cover types and colours after they are read from Settings. `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.

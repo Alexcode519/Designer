@@ -60,3 +60,107 @@
 		} ).catch( fail );
 	} );
 } )();
+
+/* Loads photos into the album from WordPress, sent in pieces like the client editor does. */
+( function () {
+	var box = document.getElementById( 'sad-photos' );
+	if ( ! box ) {
+		return;
+	}
+	var input = document.getElementById( 'sad-photos-input' );
+	var progress = document.getElementById( 'sad-photos-progress' );
+	var count = document.getElementById( 'sad-photos-count' );
+	var grid = document.getElementById( 'sad-photos-grid' );
+	var path = '/snippets-album/v1/admin/albums/' + box.getAttribute( 'data-album' ) + '/photos';
+	var chunkSize = parseInt( box.getAttribute( 'data-chunk' ), 10 ) || 1048576;
+
+	function randomId() {
+		var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+		var id = '';
+		for ( var i = 0; i < 24; i++ ) {
+			id += chars.charAt( Math.floor( Math.random() * chars.length ) );
+		}
+		return id;
+	}
+
+	function uploadOne( file ) {
+		var uploadId = randomId();
+		var total = Math.max( 1, Math.ceil( file.size / chunkSize ) );
+		function send( index ) {
+			var form = new FormData();
+			form.append( 'chunk', file.slice( index * chunkSize, ( index + 1 ) * chunkSize ), 'chunk' );
+			form.append( 'upload_id', uploadId );
+			form.append( 'index', index );
+			form.append( 'total', total );
+			form.append( 'name', file.name );
+			return wp.apiFetch( { path: path, method: 'POST', body: form } ).then( function ( result ) {
+				return result.done ? result.photo : send( index + 1 );
+			} );
+		}
+		return send( 0 );
+	}
+
+	input.addEventListener( 'change', function () {
+		var files = Array.prototype.filter.call( input.files, function ( file ) {
+			return /\.(jpe?g|png)$/i.test( file.name );
+		} );
+		input.value = '';
+		var done = 0;
+		var failed = [];
+		var chain = Promise.resolve();
+		files.forEach( function ( file ) {
+			chain = chain.then( function () {
+				progress.textContent = 'Uploading ' + ( done + 1 ) + ' of ' + files.length + '… keep this page open.';
+				return uploadOne( file ).then( function ( photo ) {
+					var img = document.createElement( 'img' );
+					img.src = photo.preview;
+					img.alt = photo.name;
+					img.title = photo.name;
+					img.style.cssText = 'height:64px;width:auto;border-radius:2px';
+					grid.appendChild( img );
+					count.textContent = String( parseInt( count.textContent, 10 ) + 1 );
+				} ).catch( function ( error ) {
+					failed.push( file.name + ( error && error.message ? ' (' + error.message + ')' : '' ) );
+				} ).then( function () {
+					done += 1;
+				} );
+			} );
+		} );
+		chain.then( function () {
+			progress.textContent = 'Added ' + ( done - failed.length ) + ' photos.' + ( failed.length ? ' Not added: ' + failed.join( ', ' ) : '' );
+		} );
+	} );
+} )();
+
+/* Notes on spreads: add a studio note, or mark one done. */
+( function () {
+	var box = document.getElementById( 'sad-notes' );
+	if ( ! box ) {
+		return;
+	}
+	var base = '/snippets-album/v1/admin/albums/' + box.getAttribute( 'data-album' ) + '/comments';
+	var status = document.getElementById( 'sad-note-status' );
+
+	function fail( error ) {
+		status.textContent = error && error.message ? error.message : 'Something went wrong.';
+	}
+
+	function reloadAtNotes() {
+		window.location.hash = 'sad_album_notes';
+		window.location.reload();
+	}
+
+	document.getElementById( 'sad-note-add' ).addEventListener( 'click', function () {
+		var text = document.getElementById( 'sad-note-text' ).value;
+		if ( ! text.trim() ) {
+			return;
+		}
+		status.textContent = 'Saving…';
+		wp.apiFetch( { path: base, method: 'POST', data: { spread: document.getElementById( 'sad-note-spread' ).value, text: text } } ).then( reloadAtNotes ).catch( fail );
+	} );
+	Array.prototype.forEach.call( box.querySelectorAll( '.sad-note-resolve' ), function ( button ) {
+		button.addEventListener( 'click', function () {
+			wp.apiFetch( { path: base + '/' + button.getAttribute( 'data-comment' ), method: 'POST', data: { resolved: button.getAttribute( 'data-resolved' ) === '1' } } ).then( reloadAtNotes ).catch( fail );
+		} );
+	} );
+} )();

@@ -23,6 +23,78 @@ function sad_title_placeholder( $text, $post ) {
 function sad_add_meta_boxes() {
 	add_meta_box( 'sad_album_details', 'Client and album', 'sad_render_details_box', 'sad_album', 'normal', 'high' );
 	add_meta_box( 'sad_album_status', 'Status and print files', 'sad_render_status_box', 'sad_album', 'side', 'high' );
+	add_meta_box( 'sad_album_photos', 'Photos', 'sad_render_photos_box', 'sad_album', 'normal', 'default' );
+	add_meta_box( 'sad_album_notes', 'Notes on spreads', 'sad_render_notes_box', 'sad_album', 'normal', 'default' );
+}
+
+/**
+ * Lets the studio load photos into a client's album, e.g. the edited gallery, so the client only designs.
+ */
+function sad_render_photos_box( $post ) {
+	$photos = sad_get_photos( $post->ID );
+	if ( 'publish' !== $post->post_status ) {
+		echo '<p>Publish the album first, then you can add photos here.</p>';
+		return;
+	}
+	?>
+	<div id="sad-photos" data-album="<?php echo (int) $post->ID; ?>" data-chunk="<?php echo (int) min( 2 * MB_IN_BYTES, max( 256 * KB_IN_BYTES, wp_max_upload_size() - 64 * KB_IN_BYTES ) ); ?>">
+		<p>Load the client's photos here and they will be waiting in their photo tray. JPEG or PNG, full size. The client can still add their own.</p>
+		<p>
+			<label class="button button-primary">Add photos<input type="file" id="sad-photos-input" accept="image/jpeg,image/png" multiple style="display:none"></label>
+			<span id="sad-photos-progress" class="description" aria-live="polite"></span>
+		</p>
+		<p class="description"><span id="sad-photos-count"><?php echo esc_html( count( $photos ) ); ?></span> photos in this album.</p>
+		<div id="sad-photos-grid" style="display:flex;flex-wrap:wrap;gap:4px;max-height:260px;overflow:auto">
+			<?php foreach ( $photos as $photo ) : ?>
+				<img src="<?php echo esc_url( sad_preview_url( $post->ID, $photo ) ); ?>" alt="<?php echo esc_attr( $photo['name'] ); ?>" title="<?php echo esc_attr( $photo['name'] ); ?>" style="height:64px;width:auto;border-radius:2px" loading="lazy">
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<?php
+}
+
+/**
+ * Proofing notes from the client and the studio, newest first, with a form to add one.
+ */
+function sad_render_notes_box( $post ) {
+	if ( 'publish' !== $post->post_status ) {
+		echo '<p>Publish the album first.</p>';
+		return;
+	}
+	$design   = sad_get_design( $post->ID );
+	$comments = array_reverse( sad_get_comments( $post->ID ) );
+	$client   = get_post_meta( $post->ID, '_sad_client_name', true );
+	?>
+	<div id="sad-notes" data-album="<?php echo (int) $post->ID; ?>">
+		<?php if ( ! $comments ) : ?>
+			<p>No notes yet. Notes you add here show under the spread in the client's editor, and the client gets an email.</p>
+		<?php endif; ?>
+		<?php foreach ( $comments as $comment ) : ?>
+			<div style="border-left:3px solid <?php echo 'studio' === $comment['author'] ? '#a8875a' : '#2271b1'; ?>;padding:4px 10px;margin:0 0 10px;<?php echo $comment['resolved'] ? 'opacity:.55' : ''; ?>">
+				<p style="margin:0 0 2px">
+					<strong><?php echo esc_html( 'studio' === $comment['author'] ? 'You' : ( $client ? $client : 'Client' ) ); ?></strong>
+					on <?php echo esc_html( sad_spread_label( $comment['spread'], $design ) ); ?>
+					<span class="description">&middot; <?php echo esc_html( sprintf( '%s ago', human_time_diff( $comment['time'] ) ) ); ?></span>
+					<?php if ( $comment['resolved'] ) : ?><span class="description">&middot; done</span><?php endif; ?>
+				</p>
+				<p style="margin:0 0 4px;white-space:pre-wrap"><?php echo esc_html( $comment['text'] ); ?></p>
+				<button type="button" class="button-link sad-note-resolve" data-comment="<?php echo esc_attr( $comment['id'] ); ?>" data-resolved="<?php echo $comment['resolved'] ? '0' : '1'; ?>"><?php echo $comment['resolved'] ? 'Reopen' : 'Mark as done'; ?></button>
+			</div>
+		<?php endforeach; ?>
+		<hr>
+		<p>
+			<label for="sad-note-spread">Add a note on</label>
+			<select id="sad-note-spread">
+				<option value="cover">Cover</option>
+				<?php foreach ( $design['spreads'] as $n => $spread ) : ?>
+					<option value="<?php echo esc_attr( $spread['id'] ); ?>"><?php echo esc_html( sprintf( 'Spread %d', $n + 1 ) ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		</p>
+		<textarea id="sad-note-text" rows="3" class="large-text" placeholder="e.g. Could we swap this photo for the one by the lake?"></textarea>
+		<p><button type="button" class="button" id="sad-note-add">Add note</button> <span id="sad-note-status" class="description"></span></p>
+	</div>
+	<?php
 }
 
 function sad_render_details_box( $post ) {
@@ -98,7 +170,23 @@ function sad_render_status_box( $post ) {
 	<?php endif; ?>
 	<p><?php echo esc_html( sprintf( '%d spreads, %d photos uploaded', count( $design['spreads'] ), $photos ) ); ?></p>
 	<p><strong>Cover:</strong> <?php echo esc_html( sad_cover_label( $design['cover'] ) ); ?><?php echo sad_cover_is_printed( $design['cover'] ) ? '' : ' <span class="description">(no print file; tell your printer this choice)</span>'; ?></p>
-	<p class="description"><?php echo esc_html( sprintf( 'Each spread exports at %d x %d px (%d dpi, bleed included).', $geo['canvas_w'], $geo['canvas_h'], $geo['dpi'] ) ); ?></p>
+	<?php $extras = sad_album_extras( $post->ID, $design ); ?>
+	<?php if ( $extras['lines'] ) : ?>
+		<p><strong>Extras:</strong>
+		<?php foreach ( $extras['lines'] as $line ) : ?>
+			<br><?php echo esc_html( $line['label'] . ': ' . sad_money( $line['amount'] ) ); ?>
+		<?php endforeach; ?>
+		<br><strong><?php echo esc_html( 'Total extras: ' . sad_money( $extras['total'] ) ); ?></strong></p>
+	<?php endif; ?>
+	<?php $open_notes = count( wp_list_filter( sad_get_comments( $post->ID ), array( 'resolved' => false ) ) ); ?>
+	<?php if ( $open_notes ) : ?>
+		<p><a href="#sad_album_notes"><?php echo esc_html( sprintf( '%d open note%s', $open_notes, 1 === $open_notes ? '' : 's' ) ); ?></a></p>
+	<?php endif; ?>
+	<p class="description"><?php echo esc_html( sprintf( 'Each spread exports at %d x %d px (%d dpi, bleed included).', $geo['canvas_w'], $geo['canvas_h'], $geo['dpi'] ) ); ?>
+	<?php if ( sad_cover_is_printed( $design['cover'] ) ) : ?>
+		<?php $cover_geo = sad_spread_geometry( $post->ID, 'cover' ); ?>
+		<?php echo esc_html( sprintf( 'The cover is %s x %s mm with wrap%s.', round( $cover_geo['width_mm'], 1 ), round( $cover_geo['height_mm'], 1 ), $cover_geo['spine_mm'] ? sprintf( ' and a %s mm spine', $cover_geo['spine_mm'] ) : '' ) ); ?>
+	<?php endif; ?></p>
 
 	<?php if ( 'publish' === $post->post_status ) : ?>
 		<p><a href="<?php echo esc_url( sad_album_link( $post->ID ) ); ?>" target="_blank" rel="noopener">View the design</a></p>
@@ -142,6 +230,9 @@ function sad_save_album_meta( $post_id, $post ) {
 	update_post_meta( $post_id, '_sad_max_spreads', $max );
 
 	sad_album_token( $post_id );
+	if ( ! get_post_meta( $post_id, '_sad_updated_at', true ) ) {
+		update_post_meta( $post_id, '_sad_updated_at', time() );
+	}
 	if ( isset( $_POST['sad_cover'] ) && 'approved' !== sad_album_status( $post_id ) ) {
 		sad_set_album_cover_type( $post_id, sanitize_title( wp_unslash( $_POST['sad_cover'] ) ) );
 	}
@@ -196,6 +287,7 @@ function sad_album_columns( $columns ) {
 		'sad_client'  => 'Client',
 		'sad_status'  => 'Status',
 		'sad_album'   => 'Size',
+		'sad_cover'   => 'Cover',
 		'sad_photos'  => 'Photos',
 		'sad_spreads' => 'Spreads',
 		'sad_updated' => 'Last change',
@@ -224,6 +316,10 @@ function sad_album_column_content( $column, $post_id ) {
 		}
 	} elseif ( 'sad_status' === $column ) {
 		echo 'approved' === sad_album_status( $post_id ) ? '<strong>Approved</strong>' : 'Designing';
+		$open_notes = count( wp_list_filter( sad_get_comments( $post_id ), array( 'resolved' => false ) ) );
+		if ( $open_notes ) {
+			echo '<br>' . esc_html( sprintf( '%d open note%s', $open_notes, 1 === $open_notes ? '' : 's' ) );
+		}
 	} elseif ( 'sad_album' === $column ) {
 		echo esc_html( sad_album_config( $post_id )['size']['name'] );
 	} elseif ( 'sad_cover' === $column ) {

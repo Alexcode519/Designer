@@ -118,18 +118,48 @@
 		return Math.min( max, Math.max( min, value ) );
 	}
 
-	/** Spread sizes in mm: trimmed (tw x th), bleed per edge, safe margin. */
-	function geo() {
+	/**
+	 * Sizes in mm of a spread (the current one by default): trimmed (tw x th), bleed per edge, safe
+	 * margin, page width (pw) and spine. A spread is two pages with no spine. The cover is back
+	 * cover, spine and front cover, with the wrap from the printer specs as its bleed, and its spine
+	 * grows with the number of spreads. Matches sad_mm_geometry() in includes/render.php.
+	 */
+	function geo( spread ) {
+		if ( spread === undefined ) {
+			spread = currentSpread();
+		}
 		var size = state.album.size;
-		var tw = size.width_mm * 2;
-		var th = size.height_mm;
+		var printer = state.album.printer || {};
+		var pw = size.width_mm;
+		var spine = 0;
 		var b = state.album.bleedMm || 0;
-		return { tw: tw, th: th, b: b, cw: tw + 2 * b, ch: th + 2 * b, safe: state.album.safeMm || 0 };
+		if ( spread && spread === state.design.cover ) {
+			spine = Math.round( ( ( printer.spineBaseMm || 0 ) + ( printer.spinePerSpreadMm || 0 ) * state.design.spreads.length ) * 10 ) / 10;
+			if ( printer.coverWrapMm > 0 ) {
+				b = printer.coverWrapMm;
+			}
+		}
+		var tw = 2 * pw + spine;
+		var th = size.height_mm;
+		return { tw: tw, th: th, b: b, cw: tw + 2 * b, ch: th + 2 * b, safe: state.album.safeMm || 0, pw: pw, spine: spine };
+	}
+
+	/** Geometry of the album's inside spreads. */
+	function spreadGeo() {
+		return geo( null );
 	}
 
 	function spreadAspect() {
-		var g = geo();
+		var g = spreadGeo();
 		return g.tw / g.th;
+	}
+
+	function isText( item ) {
+		return item.type === 'text';
+	}
+
+	function newSpreadId() {
+		return randomId().slice( 0, 8 );
 	}
 
 	/** The spread being edited. The cover is spread -1: back cover on the left, front on the right. */
@@ -173,14 +203,14 @@
 		return state.selectedItem !== null && spread ? spread.items[ state.selectedItem ] || null : null;
 	}
 
-	/** A box in mm from the top left of the trimmed spread. */
-	function itemMm( item ) {
-		var g = geo();
+	/** A box in mm from the top left of the trimmed spread (of geometry g, the current spread's by default). */
+	function itemMm( item, g ) {
+		g = g && g.tw ? g : geo();
 		return { x: item.x * g.tw, y: item.y * g.th, w: item.w * g.tw, h: item.h * g.th };
 	}
 
-	function setItemMm( item, rect ) {
-		var g = geo();
+	function setItemMm( item, rect, g ) {
+		g = g && g.tw ? g : geo();
 		item.x = rect.x / g.tw;
 		item.y = rect.y / g.th;
 		item.w = rect.w / g.tw;
@@ -188,23 +218,98 @@
 	}
 
 	function newItem( photo, x, y, w, h ) {
-		return { photo: photo || null, x: x, y: y, w: w, h: h, rot: 0, fit: 'fill', zoom: 1, px: 0.5, py: 0.5 };
+		return { type: 'photo', photo: photo || null, x: x, y: y, w: w, h: h, rot: 0, fit: 'fill', zoom: 1, px: 0.5, py: 0.5 };
 	}
 
-	/** Boxes for a layout; edges touching the trim run out into the bleed. Matches sad_layout_items(). */
-	function layoutItems( layoutId, photoIds ) {
-		var g = geo();
+	/**
+	 * Boxes for a layout on `spread` (the current one by default; null for a new spread). Edges
+	 * touching the trim run out into the bleed. Matches sad_layout_items(). On a cover with a spine,
+	 * the left half of the layout goes on the back cover and the right half on the front.
+	 */
+	function layoutItems( layoutId, photoIds, spread ) {
+		var g = geo( spread );
 		var bx = g.b / g.tw;
 		var by = g.b / g.th;
 		var eps = 0.001;
 		var slots = ( layouts[ layoutId ] || layouts[ 'two-full' ] ).slots;
+		function mapX( f ) {
+			return g.spine ? ( f <= 0.5 ? f * 2 * g.pw : g.pw + g.spine + ( f - 0.5 ) * 2 * g.pw ) / g.tw : f;
+		}
 		return slots.map( function ( r, i ) {
-			var x = r[ 0 ] <= eps ? -bx : r[ 0 ];
+			var x = r[ 0 ] <= eps ? -bx : mapX( r[ 0 ] );
 			var y = r[ 1 ] <= eps ? -by : r[ 1 ];
-			var x2 = r[ 0 ] + r[ 2 ] >= 1 - eps ? 1 + bx : r[ 0 ] + r[ 2 ];
+			var x2 = r[ 0 ] + r[ 2 ] >= 1 - eps ? 1 + bx : mapX( r[ 0 ] + r[ 2 ] );
 			var y2 = r[ 1 ] + r[ 3 ] >= 1 - eps ? 1 + by : r[ 1 ] + r[ 3 ];
 			return newItem( ( photoIds || [] )[ i ], x, y, x2 - x, y2 - y );
 		} );
+	}
+
+	/** An empty photo box covering the front cover, out to the wrap. Matches sad_cover_front_item(). */
+	function frontCoverItem() {
+		var g = geo( state.design.cover );
+		var x = ( g.pw + g.spine ) / g.tw;
+		return newItem( null, x, -g.b / g.th, 1 + g.b / g.tw - x, 1 + 2 * g.b / g.th );
+	}
+
+	/**
+	 * The cover's spine grows with the number of spreads. After spreads are added or removed, keeps
+	 * cover boxes where they were on the back and front cover (boxes across the whole cover stretch).
+	 */
+	function keepCoverInPlace( before ) {
+		var after = geo( state.design.cover );
+		var delta = after.spine - before.spine;
+		if ( ! delta && after.b === before.b ) {
+			return;
+		}
+		var near = 0.5;
+		state.design.cover.items.forEach( function ( item ) {
+			var m = itemMm( item, before );
+			var cx = m.x + m.w / 2;
+			var right = m.x + m.w;
+			var bottom = m.y + m.h;
+			if ( m.x <= 0 && right >= before.tw ) {
+				right += delta;
+			} else if ( cx >= before.pw + before.spine ) {
+				m.x += delta;
+				right += delta;
+			} else if ( cx > before.pw ) {
+				m.x += delta / 2;
+				right += delta / 2;
+			}
+			// Boxes that ran to the outer edge keep running to it when the wrap changes.
+			if ( ! isText( item ) ) {
+				m.x = m.x <= -before.b + near ? -after.b : m.x;
+				right = right >= after.tw + before.b - near ? after.tw + after.b : right;
+				m.y = m.y <= -before.b + near ? -after.b : m.y;
+				bottom = bottom >= before.th + before.b - near ? after.th + after.b : bottom;
+			}
+			m.w = right - m.x;
+			m.h = bottom - m.y;
+			setItemMm( item, m, after );
+		} );
+	}
+
+	/**
+	 * The spine and wrap the cover was last laid out with, so a change to the printer specs in
+	 * Settings (or to the spreads) moves the cover boxes to match.
+	 */
+	function coverSpec() {
+		var g = geo( state.design.cover );
+		return { spine: g.spine, b: g.b };
+	}
+
+	function fitCoverToSpecs() {
+		var spec = state.design.cover.spec || { spine: 0, b: state.album.bleedMm || 0 };
+		var now = coverSpec();
+		if ( spec.spine === now.spine && spec.b === now.b ) {
+			return false;
+		}
+		var before = geo( state.design.cover );
+		before.spine = spec.spine;
+		before.b = spec.b;
+		before.tw = 2 * before.pw + spec.spine;
+		keepCoverInPlace( before );
+		return true;
 	}
 
 	/** Spread numbers (from 1) each photo is used on. */
@@ -237,20 +342,20 @@
 	}
 
 	/** Effective print resolution of a photo in its box, in dots per inch. */
-	function itemDpi( item ) {
-		var photo = item.photo && state.photos[ item.photo ];
+	function itemDpi( item, g ) {
+		var photo = ! isText( item ) && item.photo && state.photos[ item.photo ];
 		if ( ! photo ) {
 			return null;
 		}
-		var m = itemMm( item );
+		var m = itemMm( item, g );
 		var mmPerPx = item.fit === 'fit'
 			? Math.min( m.w / photo.width, m.h / photo.height )
 			: Math.max( m.w / photo.width, m.h / photo.height ) * item.zoom;
 		return Math.round( 25.4 / mmPerPx );
 	}
 
-	function isLowRes( item ) {
-		var dpi = itemDpi( item );
+	function isLowRes( item, g ) {
+		var dpi = itemDpi( item, g );
 		return dpi !== null && dpi < state.album.minDpi;
 	}
 
@@ -327,6 +432,7 @@
 		}
 		state.dirty = false;
 		state.saving = true;
+		state.design.cover.spec = coverSpec();
 		setStatus( 'Saving…' );
 		return api( '/design', { method: 'POST', json: { design: state.design }, keepalive: keepalive } )
 			.then( function () {
@@ -375,14 +481,16 @@
 		}
 		var spread = currentSpread();
 		var placed = spread.items.filter( function ( item ) {
-			return item.photo;
+			return ! isText( item ) && item.photo;
 		} ).map( function ( item ) {
 			return item.photo;
 		} );
+		var texts = spread.items.filter( isText );
 		var count = layouts[ layoutId ].slots.length;
 		checkpoint();
 		spread.layout = layoutId;
-		spread.items = layoutItems( layoutId, placed );
+		// Text stays where it is, on top.
+		spread.items = layoutItems( layoutId, placed ).concat( texts );
 		state.selectedItem = null;
 		if ( placed.length > count ) {
 			toast( 'This layout has fewer boxes, so ' + ( placed.length - count ) + ' photo(s) were taken off this spread. Undo brings them back.' );
@@ -401,6 +509,9 @@
 
 	function placeInItem( index, photoId ) {
 		var item = currentSpread().items[ index ];
+		if ( ! item || isText( item ) ) {
+			return;
+		}
 		checkpoint();
 		item.photo = photoId;
 		item.zoom = 1;
@@ -486,6 +597,11 @@
 			return;
 		}
 		checkpoint();
+		if ( isText( items[ from ] ) || isText( items[ to ] ) ) {
+			state.swapFrom = null;
+			renderSelection();
+			return;
+		}
 		[ 'photo', 'zoom', 'px', 'py', 'fit' ].forEach( function ( key ) {
 			var value = items[ from ][ key ];
 			items[ from ][ key ] = items[ to ][ key ];
@@ -524,6 +640,179 @@
 		changed();
 	}
 
+	/* ---------- text ---------- */
+
+	var LINE_HEIGHT = 1.25;
+	var fontLoads = {};
+	var measureCtx = document.createElement( 'canvas' ).getContext( '2d' );
+
+	function fontFamily( id ) {
+		return 'sad-font-' + id;
+	}
+
+	/** Loads a bundled font once; resolves when it can be measured and drawn. */
+	function loadFont( id ) {
+		var font = state.album.fonts[ id ];
+		if ( ! font ) {
+			return Promise.resolve();
+		}
+		if ( ! fontLoads[ id ] ) {
+			fontLoads[ id ] = window.FontFace
+				? new window.FontFace( fontFamily( id ), 'url("' + font.url + '")' ).load().then( function ( face ) {
+					document.fonts.add( face );
+					fontLoads[ id ].ready = true;
+				} ).catch( function () {} )
+				: Promise.resolve();
+		}
+		return fontLoads[ id ];
+	}
+
+	function fontReady( id ) {
+		return !! ( fontLoads[ id ] && fontLoads[ id ].ready );
+	}
+
+	/** Font size in mm (sizes are in points, 1 pt = 25.4/72 mm). */
+	function textEm( item ) {
+		return item.size * 25.4 / 72;
+	}
+
+	/** Baseline of line i from the top of the box, in mm. Matches sad_text_baseline(). */
+	function textBaseline( i, em ) {
+		return ( i + 0.5 ) * em * LINE_HEIGHT + 0.32 * em;
+	}
+
+	/** Breaks the text into lines that fit `width` mm, measured with the real font. */
+	function wrapText( item, width ) {
+		var em = textEm( item );
+		// Measure at 10 px per mm for precision.
+		measureCtx.font = em * 10 + 'px "' + fontFamily( item.font ) + '"';
+		var max = width * 10;
+		var lines = [];
+		String( item.text || '' ).split( '\n' ).forEach( function ( paragraph ) {
+			var line = '';
+			paragraph.split( / +/ ).forEach( function ( word ) {
+				var tryLine = line ? line + ' ' + word : word;
+				if ( ! line || measureCtx.measureText( tryLine ).width <= max ) {
+					line = tryLine;
+					return;
+				}
+				lines.push( line );
+				line = word;
+			} );
+			// Break words that are wider than the box on their own.
+			while ( line.length > 1 && measureCtx.measureText( line ).width > max ) {
+				var cut = line.length - 1;
+				while ( cut > 1 && measureCtx.measureText( line.slice( 0, cut ) ).width > max ) {
+					cut -= 1;
+				}
+				lines.push( line.slice( 0, cut ) );
+				line = line.slice( cut );
+			}
+			lines.push( line );
+		} );
+		return lines;
+	}
+
+	/** Re-wraps a text box after a change and makes the box as tall as its lines (top stays put). */
+	function layoutText( item, g ) {
+		g = g || geo();
+		var m = itemMm( item, g );
+		item.lines = wrapText( item, m.w );
+		var h = Math.max( 1, item.lines.length ) * textEm( item ) * LINE_HEIGHT;
+		setItemMm( item, { x: m.x, y: m.y, w: m.w, h: h }, g );
+	}
+
+	/** Changes a text box once its font has loaded, then redraws it. */
+	function editText( item, change ) {
+		checkpoint( 'text' );
+		change( item );
+		var spread = currentSpread();
+		function apply() {
+			if ( spread !== currentSpread() || spread.items.indexOf( item ) === -1 ) {
+				return;
+			}
+			layoutText( item );
+			refreshItem( spread.items.indexOf( item ) );
+			scheduleSave();
+			clearTimeout( zoomSaveTimer );
+			zoomSaveTimer = setTimeout( renderStrip, 300 );
+		}
+		if ( fontReady( item.font ) ) {
+			apply();
+		} else {
+			loadFont( item.font ).then( apply );
+		}
+	}
+
+	var SVG = 'http://www.w3.org/2000/svg';
+
+	/** Draws a text box's lines as SVG, in mm, so it scales with the stage and thumbnails. */
+	function paintText( node, item, g ) {
+		var m = itemMm( item, g );
+		var em = textEm( item );
+		var svg = document.createElementNS( SVG, 'svg' );
+		svg.setAttribute( 'viewBox', '0 0 ' + m.w + ' ' + m.h );
+		svg.setAttribute( 'preserveAspectRatio', 'none' );
+		svg.setAttribute( 'class', 'sad-text-svg' );
+		var anchor = { left: 'start', center: 'middle', right: 'end' }[ item.align ] || 'middle';
+		var x = { left: 0, center: m.w / 2, right: m.w }[ item.align ];
+		( item.lines || [] ).forEach( function ( line, i ) {
+			var text = document.createElementNS( SVG, 'text' );
+			text.setAttribute( 'x', x === undefined ? m.w / 2 : x );
+			text.setAttribute( 'y', textBaseline( i, em ) );
+			text.setAttribute( 'text-anchor', anchor );
+			text.setAttribute( 'font-family', '"' + fontFamily( item.font ) + '"' );
+			text.setAttribute( 'font-size', em );
+			text.setAttribute( 'fill', item.color );
+			text.setAttribute( 'xml:space', 'preserve' );
+			text.textContent = line;
+			svg.appendChild( text );
+		} );
+		node.innerHTML = '';
+		node.appendChild( svg );
+		if ( ! fontReady( item.font ) ) {
+			loadFont( item.font );
+		}
+	}
+
+	/** Adds a text box in the middle of the right-hand page (the front, on the cover). */
+	function addText() {
+		if ( boundCover() ) {
+			toast( 'Text goes on printed covers. Leather and linen covers can be embossed; ask us about it.' );
+			return;
+		}
+		var g = geo();
+		var fonts = Object.keys( state.album.fonts || {} );
+		var item = {
+			type: 'text',
+			text: 'Your text here',
+			lines: [ 'Your text here' ],
+			font: fonts[ 0 ],
+			size: 24,
+			color: '#222222',
+			align: 'center',
+			x: 0,
+			y: 0,
+			w: 0,
+			h: 0,
+			rot: 0,
+		};
+		var w = Math.min( g.pw * 0.7, 160 );
+		var h = textEm( item ) * LINE_HEIGHT;
+		setItemMm( item, { x: g.pw + g.spine + ( g.pw - w ) / 2, y: ( g.th - h ) / 2, w: w, h: h }, g );
+		checkpoint();
+		currentSpread().items.push( item );
+		currentSpread().layout = null;
+		state.selectedItem = currentSpread().items.length - 1;
+		state.armedPhoto = null;
+		changed();
+		editText( item, function () {} );
+		if ( dom.textInput ) {
+			dom.textInput.focus();
+			dom.textInput.select();
+		}
+	}
+
 	/* ---------- auto-fill ---------- */
 
 	function layoutCapacity( id ) {
@@ -559,6 +848,11 @@
 		var spreads = Math.round( total / average ) || 1;
 		spreads = Math.max( spreads, Math.ceil( total / maxCap ) );
 		spreads = Math.min( state.album.maxSpreads, Math.max( state.album.minSpreads, spreads ) );
+		// Round up to the printer's spread steps, if it has them.
+		var step = ( state.album.printer || {} ).spreadStep || 1;
+		if ( step > 1 && spreads % step && Math.ceil( spreads / step ) * step <= state.album.maxSpreads ) {
+			spreads = Math.ceil( spreads / step ) * step;
+		}
 		var usable = Math.min( total, spreads * maxCap );
 
 		var result = [];
@@ -599,7 +893,8 @@
 				layout = 'right-only';
 			}
 			next += ids.length;
-			result.push( { layout: layout, items: layoutItems( layout, ids ) } );
+			var old = state.design.spreads[ i ];
+			result.push( { id: old ? old.id : newSpreadId(), layout: layout, bg: old ? old.bg : '', items: layoutItems( layout, ids, null ) } );
 		}
 		return { spreads: result, placed: next, skipped: total - next };
 	}
@@ -622,8 +917,10 @@
 			return;
 		}
 		var filled = buildAutoFill( template, photoIds );
+		var coverBefore = geo( state.design.cover );
 		checkpoint();
 		state.design.spreads = filled.spreads;
+		keepCoverInPlace( coverBefore );
 		fillEmptyCover( photoIds[ 0 ] );
 		state.current = 0;
 		state.selectedItem = null;
@@ -641,24 +938,29 @@
 	function fillEmptyCover( photoId ) {
 		var cover = state.design.cover;
 		if ( ! photoId || ! isPrinted( cover ) || cover.items.some( function ( item ) {
-			return item.photo;
+			return ! isText( item ) && item.photo;
 		} ) ) {
 			return;
 		}
-		if ( ! cover.items.length ) {
-			var g = geo();
-			cover.items.push( newItem( null, 0.5, -g.b / g.th, 0.5 + g.b / g.tw, 1 + 2 * g.b / g.th ) );
+		var boxes = cover.items.filter( function ( item ) {
+			return ! isText( item );
+		} );
+		if ( ! boxes.length ) {
+			boxes = [ frontCoverItem() ];
+			cover.items.unshift( boxes[ 0 ] );
 		}
-		cover.items[ cover.items.length - 1 ].photo = photoId;
+		boxes[ boxes.length - 1 ].photo = photoId;
 	}
 
-		function addSpread() {
+	function addSpread() {
 		if ( state.design.spreads.length >= state.album.maxSpreads ) {
 			toast( 'Your album can have up to ' + state.album.maxSpreads + ' spreads.' );
 			return;
 		}
+		var coverBefore = geo( state.design.cover );
 		checkpoint();
-		state.design.spreads.splice( state.current + 1, 0, { layout: 'two-full', items: layoutItems( 'two-full' ) } );
+		state.design.spreads.splice( state.current + 1, 0, { id: newSpreadId(), layout: 'two-full', bg: '', items: layoutItems( 'two-full', null, null ) } );
+		keepCoverInPlace( coverBefore );
 		state.current += 1;
 		state.selectedItem = null;
 		changed();
@@ -671,8 +973,10 @@
 		if ( ! window.confirm( 'Delete spread ' + ( state.current + 1 ) + '? The photos stay in your photo tray.' ) ) {
 			return;
 		}
+		var coverBefore = geo( state.design.cover );
 		checkpoint();
 		state.design.spreads.splice( state.current, 1 );
+		keepCoverInPlace( coverBefore );
 		state.current = Math.min( state.current, state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		changed();
@@ -811,7 +1115,7 @@
 			state.photoOrder = state.photoOrder.filter( function ( id ) {
 				return id !== photoId;
 			} );
-			state.design.spreads.forEach( function ( spread ) {
+			state.design.spreads.concat( [ state.design.cover ] ).forEach( function ( spread ) {
 				spread.items.forEach( function ( item ) {
 					if ( item.photo === photoId ) {
 						item.photo = null;
@@ -829,27 +1133,48 @@
 
 	/* ---------- approval ---------- */
 
+	function emptyBox( item ) {
+		return ! isText( item ) && ( ! item.photo || ! state.photos[ item.photo ] );
+	}
+
+	/** The spread counts the printer can bind either side of `count`, when spreads come in steps. */
+	function stepAdvice( count ) {
+		var step = ( state.album.printer || {} ).spreadStep || 1;
+		if ( step <= 1 || count % step === 0 ) {
+			return null;
+		}
+		var down = count - ( count % step );
+		var up = down + step;
+		var options = [ up ];
+		if ( down >= state.album.minSpreads ) {
+			options.unshift( down );
+		}
+		return 'Albums are bound in steps of ' + step + ' spreads, so yours needs ' + options.join( ' or ' ) + ' spreads (it has ' + count + ').';
+	}
+
 	function problems() {
 		var list = [];
 		var cover = state.design.cover;
 		if ( isPrinted( cover ) ) {
-			if ( ! cover.items.length ) {
-				list.push( 'The printed cover has no photos. Add some, or choose a different cover.' );
-			} else if ( cover.items.some( function ( item ) {
-				return ! item.photo || ! state.photos[ item.photo ];
+			if ( ! cover.items.some( function ( item ) {
+				return ! isText( item );
 			} ) ) {
+				list.push( 'The printed cover has no photos. Add some, or choose a different cover.' );
+			} else if ( cover.items.some( emptyBox ) ) {
 				list.push( 'The cover has an empty photo box. Add a photo or delete the box.' );
 			}
 		}
 		if ( state.design.spreads.length < state.album.minSpreads ) {
 			list.push( 'Your album needs at least ' + state.album.minSpreads + ' spreads (it has ' + state.design.spreads.length + ').' );
 		}
+		var step = stepAdvice( state.design.spreads.length );
+		if ( step ) {
+			list.push( step );
+		}
 		state.design.spreads.forEach( function ( spread, n ) {
 			if ( ! spread.items.length ) {
 				list.push( 'Spread ' + ( n + 1 ) + ' is blank.' );
-			} else if ( spread.items.some( function ( item ) {
-				return ! item.photo || ! state.photos[ item.photo ];
-			} ) ) {
+			} else if ( spread.items.some( emptyBox ) ) {
 				list.push( 'Spread ' + ( n + 1 ) + ' has an empty photo box. Add a photo or delete the box.' );
 			}
 		} );
@@ -858,11 +1183,17 @@
 
 	function lowResolution() {
 		var list = [];
-		if ( isPrinted( state.design.cover ) && state.design.cover.items.some( isLowRes ) ) {
+		var coverGeo = geo( state.design.cover );
+		if ( isPrinted( state.design.cover ) && state.design.cover.items.some( function ( item ) {
+			return isLowRes( item, coverGeo );
+		} ) ) {
 			list.push( 'cover' );
 		}
+		var g = spreadGeo();
 		state.design.spreads.forEach( function ( spread, n ) {
-			if ( spread.items.some( isLowRes ) ) {
+			if ( spread.items.some( function ( item ) {
+				return isLowRes( item, g );
+			} ) ) {
 				list.push( n + 1 );
 			}
 		} );
@@ -870,6 +1201,10 @@
 	}
 
 	function approve() {
+		if ( ! state.previewed ) {
+			openPreview( true );
+			return;
+		}
 		var issues = problems();
 		if ( issues.length ) {
 			window.alert( 'Before approving:\n\n' + issues.slice( 0, 8 ).join( '\n' ) + ( issues.length > 8 ? '\n…' : '' ) );
@@ -902,8 +1237,8 @@
 	/* ---------- drawing ---------- */
 
 	/** Positions a box (or its selection frame) at `scale` px per mm, offset by `off` mm. */
-	function position( node, item, scale, off ) {
-		var m = itemMm( item );
+	function position( node, item, scale, off, g ) {
+		var m = itemMm( item, g );
 		node.style.left = ( off + m.x ) * scale + 'px';
 		node.style.top = ( off + m.y ) * scale + 'px';
 		node.style.width = m.w * scale + 'px';
@@ -911,7 +1246,11 @@
 		node.style.transform = item.rot ? 'rotate(' + item.rot + 'deg)' : '';
 	}
 
-	function paint( node, item, scale ) {
+	function paint( node, item, scale, g ) {
+		if ( isText( item ) ) {
+			paintText( node, item, g );
+			return;
+		}
 		var photo = item.photo && state.photos[ item.photo ];
 		node.style.backgroundImage = photo ? 'url("' + photo.preview + '")' : '';
 		node.classList.toggle( 'sad-item__img--empty', ! photo );
@@ -923,7 +1262,7 @@
 			node.style.backgroundPosition = '50% 50%';
 			return;
 		}
-		var m = itemMm( item );
+		var m = itemMm( item, g );
 		var w = m.w * scale;
 		var h = m.h * scale;
 		var s = Math.max( w / photo.width, h / photo.height ) * item.zoom;
@@ -937,11 +1276,12 @@
 	 */
 	function drawItems( container, spread, scale, off, interactive ) {
 		var nodes = [];
+		var g = geo( spread );
 		spread.items.forEach( function ( item, index ) {
-			var img = el( 'div', { class: 'sad-item__img' } );
-			var node = el( 'div', { class: 'sad-item', 'data-index': String( index ) }, [ img ] );
-			position( node, item, scale, off );
-			paint( img, item, scale );
+			var img = el( 'div', { class: isText( item ) ? 'sad-item__text' : 'sad-item__img' } );
+			var node = el( 'div', { class: 'sad-item' + ( isText( item ) ? ' sad-item--text' : '' ), 'data-index': String( index ) }, [ img ] );
+			position( node, item, scale, off, g );
+			paint( img, item, scale, g );
 			if ( interactive ) {
 				decorateItem( node, item, index );
 			}
@@ -952,6 +1292,10 @@
 	}
 
 	function decorateItem( node, item, index ) {
+		if ( isText( item ) ) {
+			decorateText( node, item, index );
+			return;
+		}
 		var photo = item.photo && state.photos[ item.photo ];
 		node.setAttribute( 'tabindex', '0' );
 		node.setAttribute( 'role', 'button' );
@@ -1030,6 +1374,36 @@
 		}, { passive: false } );
 	}
 
+	/** Text boxes: select and drag like a photo box; double-click to edit the words. */
+	function decorateText( node, item, index ) {
+		node.setAttribute( 'tabindex', '0' );
+		node.setAttribute( 'role', 'button' );
+		node.setAttribute( 'aria-label', 'Text: ' + item.text );
+		if ( isLocked() ) {
+			return;
+		}
+		node.addEventListener( 'pointerdown', function ( event ) {
+			if ( event.button !== 0 || state.armedPhoto ) {
+				return;
+			}
+			if ( state.swapFrom !== null ) {
+				state.swapFrom = null;
+			}
+			event.preventDefault();
+			node.focus( { preventScroll: true } );
+			if ( state.selectedItem !== index ) {
+				selectItem( index );
+			}
+			startMove( event, node, item, index );
+		} );
+		node.addEventListener( 'dblclick', function () {
+			if ( dom.textInput ) {
+				dom.textInput.focus();
+				dom.textInput.select();
+			}
+		} );
+	}
+
 	/** Redraws one box and its selection frame after a drag step, without rebuilding the stage. */
 	function refreshItem( index ) {
 		var item = currentSpread().items[ index ];
@@ -1038,8 +1412,8 @@
 			return;
 		}
 		var g = geo();
-		position( node, item, state.scale, g.b );
-		paint( node.firstChild, item, state.scale );
+		position( node, item, state.scale, g.b, g );
+		paint( node.firstChild, item, state.scale, g );
 		if ( state.selectedItem === index ) {
 			updateSelection();
 		}
@@ -1094,9 +1468,10 @@
 			lines.push( g.safe, len - g.safe );
 		}
 		if ( axis === 'x' ) {
-			lines.push( len / 4, len * 3 / 4 );
+			// Page edges at the fold or spine, and page centres.
+			lines.push( g.pw, g.pw + g.spine, g.pw / 2, g.pw + g.spine + g.pw / 2 );
 			if ( g.safe ) {
-				lines.push( len / 2 - g.safe, len / 2 + g.safe );
+				lines.push( g.pw - g.safe, g.pw + g.spine + g.safe );
 			}
 		}
 		currentSpread().items.forEach( function ( other, i ) {
@@ -1201,6 +1576,7 @@
 		var hy = handle.indexOf( 's' ) !== -1 ? 1 : handle.indexOf( 'n' ) !== -1 ? -1 : 0;
 		var cx = start.x + start.w / 2;
 		var cy = start.y + start.h / 2;
+		var startSize = item.size;
 		var target = event.currentTarget;
 		event.stopPropagation();
 		drag( event, target, function ( dx, dy, e ) {
@@ -1210,6 +1586,23 @@
 			var ly = -mx * sin + my * cos;
 			var w = hx ? Math.max( MIN_BOX_MM, start.w + hx * lx ) : start.w;
 			var h = hy ? Math.max( MIN_BOX_MM, start.h + hy * ly ) : start.h;
+			if ( isText( item ) ) {
+				// Sides change the width and re-wrap; corners scale the text.
+				if ( hx && hy ) {
+					var f = Math.max( 0.1, w / start.w );
+					item.size = Math.round( clamp( startSize * f, 4, 300 ) * 2 ) / 2;
+					h = start.h * f;
+				} else if ( ! hx ) {
+					return;
+				}
+				var tm = { w: w, h: h };
+				var tox = hx * ( w - start.w ) / 2;
+				var toy = hy * ( h - start.h ) / 2;
+				setItemMm( item, { x: cx + tox * cos - toy * sin - w / 2, y: cy + tox * sin + toy * cos - h / 2, w: tm.w, h: tm.h } );
+				layoutText( item );
+				refreshItem( index );
+				return;
+			}
 			if ( hx && hy && e.shiftKey ) {
 				var f = Math.max( w / start.w, h / start.h );
 				w = start.w * f;
@@ -1298,6 +1691,9 @@
 		dom.stage.style.height = g.ch * state.scale + 'px';
 		dom.canvas.innerHTML = '';
 		paintCover( dom.canvas, onCover() ? spread : null, state.scale, g.b );
+		if ( ! boundCover() ) {
+			dom.canvas.style.backgroundColor = spread.bg || '';
+		}
 		dom.itemNodes = boundCover() ? [] : drawItems( dom.canvas, spread, state.scale, g.b, true );
 		dom.canvas.classList.toggle( 'sad-canvas--armed', !! state.armedPhoto );
 		dom.pageLabels.hidden = ! onCover();
@@ -1307,7 +1703,7 @@
 		renderSelection();
 		renderLowResNotice();
 
-		dom.spreadLabel.textContent = onCover() ? 'Cover' : 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
+		dom.spreadLabel.textContent = onCover() ? 'Cover' + ( g.spine ? ' · ' + g.spine + ' mm spine' : '' ) : 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
 		dom.prev.disabled = state.current === -1;
 		dom.spreadTools.hidden = isLocked() || onCover();
 		dom.next.disabled = state.current === state.design.spreads.length - 1;
@@ -1331,18 +1727,21 @@
 		var rgb = parseInt( hex.slice( 1 ), 16 );
 		var light = ( ( rgb >> 16 ) * 0.299 + ( ( rgb >> 8 ) & 255 ) * 0.587 + ( rgb & 255 ) * 0.114 ) > 150;
 		node.style.setProperty( '--sad-stitch', light ? 'rgba(60, 45, 30, 0.45)' : 'rgba(255, 244, 225, 0.55)' );
-		var g = geo();
-		var inset = Math.min( g.th, g.tw / 2 ) * 0.07;
-		[ 0, g.tw / 2 ].forEach( function ( left ) {
+		var g = geo( cover );
+		var inset = Math.min( g.th, g.pw ) * 0.07;
+		[ 0, g.pw + g.spine ].forEach( function ( left ) {
 			var stitch = el( 'div', { class: 'sad-stitch', 'aria-hidden': 'true' } );
 			stitch.style.left = ( off + left + inset ) * scale + 'px';
 			stitch.style.top = ( off + inset ) * scale + 'px';
-			stitch.style.width = ( g.tw / 2 - 2 * inset ) * scale + 'px';
+			stitch.style.width = ( g.pw - 2 * inset ) * scale + 'px';
 			stitch.style.height = ( g.th - 2 * inset ) * scale + 'px';
 			node.appendChild( stitch );
 		} );
 		var spine = el( 'div', { class: 'sad-spine', 'aria-hidden': 'true' } );
-		spine.style.left = ( off + g.tw / 2 ) * scale + 'px';
+		spine.style.left = ( off + g.pw + g.spine / 2 ) * scale + 'px';
+		if ( g.spine ) {
+			spine.style.width = Math.max( g.spine * 1.6, g.tw * 0.04 ) * scale + 'px';
+		}
 		node.appendChild( spine );
 	}
 
@@ -1354,16 +1753,20 @@
 		return node;
 	}
 
-	/** Bleed (shaded, red trim line), safe area (green) and the middle fold. */
+	/** Bleed (shaded, red trim line), safe area (green) and the middle fold, or the cover's spine. */
 	function renderGuides() {
 		var g = geo();
 		dom.guides.innerHTML = '';
 		dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-trim' } ), g.b, g.b, g.tw, g.th ) );
 		if ( g.safe ) {
-			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.safe, g.b + g.safe, g.tw / 2 - 2 * g.safe, g.th - 2 * g.safe ) );
-			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.tw / 2 + g.safe, g.b + g.safe, g.tw / 2 - 2 * g.safe, g.th - 2 * g.safe ) );
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.safe, g.b + g.safe, g.pw - 2 * g.safe, g.th - 2 * g.safe ) );
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-safe' } ), g.b + g.pw + g.spine + g.safe, g.b + g.safe, g.pw - 2 * g.safe, g.th - 2 * g.safe ) );
 		}
-		dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-fold' } ), g.b + g.tw / 2, g.b, 0, g.th ) );
+		if ( g.spine ) {
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-spine', title: 'Spine' } ), g.b + g.pw, g.b, g.spine, g.th ) );
+		} else {
+			dom.guides.appendChild( box( el( 'div', { class: 'sad-guide-fold' } ), g.b + g.pw, g.b, 0, g.th ) );
+		}
 		dom.snapX = el( 'div', { class: 'sad-snap sad-snap--x', hidden: true } );
 		dom.snapY = el( 'div', { class: 'sad-snap sad-snap--y', hidden: true } );
 		dom.guides.appendChild( dom.snapX );
@@ -1384,7 +1787,7 @@
 			return;
 		}
 		var index = state.selectedItem;
-		dom.frame = el( 'div', { class: 'sad-frame' + ( state.adjusting ? ' sad-frame--adjusting' : '' ) } );
+		dom.frame = el( 'div', { class: 'sad-frame' + ( state.adjusting ? ' sad-frame--adjusting' : '' ) + ( isText( item ) ? ' sad-frame--text' : '' ) } );
 		if ( ! state.adjusting ) {
 			HANDLES.forEach( function ( h ) {
 				var handle = el( 'span', { class: 'sad-handle sad-handle--' + h, 'aria-hidden': 'true' } );
@@ -1418,12 +1821,12 @@
 			return;
 		}
 		var g = geo();
-		var m = itemMm( item );
-		position( dom.frame, item, state.scale, g.b );
+		var m = itemMm( item, g );
+		position( dom.frame, item, state.scale, g.b, g );
 		dom.dims.style.transform = item.rot ? 'translate(-50%, 6px) rotate(' + -item.rot + 'deg)' : '';
 		dom.dims.textContent = state.adjusting
 			? 'Drag to move the photo inside the box · scroll to zoom'
-			: ( item.photo && state.photos[ item.photo ] ? state.photos[ item.photo ].name + ' · ' : '' ) + Math.round( m.w ) + ' × ' + Math.round( m.h ) + ' mm' + ( item.rot ? ' · ' + Math.round( item.rot ) + '°' : '' );
+			: ( isText( item ) ? item.font && state.album.fonts[ item.font ] ? state.album.fonts[ item.font ].name.replace( / \(.*\)$/, '' ) + ' ' + item.size + ' pt · ' : '' : item.photo && state.photos[ item.photo ] ? state.photos[ item.photo ].name + ' · ' : '' ) + Math.round( m.w ) + ' × ' + Math.round( m.h ) + ' mm' + ( item.rot ? ' · ' + Math.round( item.rot ) + '°' : '' );
 
 		// Quick buttons above the box (below it when the box is at the top).
 		var a = Math.abs( item.rot * Math.PI / 180 );
@@ -1459,7 +1862,7 @@
 	}
 
 	function quickButtons( item, index ) {
-		var photo = item.photo && state.photos[ item.photo ];
+		var photo = ! isText( item ) && item.photo && state.photos[ item.photo ];
 		var buttons = [];
 		if ( photo && item.fit === 'fill' ) {
 			buttons.push( iconButton( 'Move the photo inside the box', '✥', function () {
@@ -1493,7 +1896,10 @@
 
 	function renderLowResNotice() {
 		var spread = currentSpread();
-		dom.lowres.hidden = ! spread.items.some( isLowRes );
+		var g = geo();
+		dom.lowres.hidden = ! spread.items.some( function ( item ) {
+			return isLowRes( item, g );
+		} );
 	}
 
 	var zoomSaveTimer;
@@ -1553,12 +1959,19 @@
 			return;
 		}
 		var item = selectedItem();
+		dom.textInput = null;
 		if ( ! item && onCover() ) {
 			renderCoverTools();
 			return;
 		}
 		if ( ! item ) {
+			dom.slotTools.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Spread ' + ( state.current + 1 ) } ) );
 			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos onto the spread to add them, or onto a box to fill it. Click a box to move it, resize it from the corners, or turn it with the round handle. Keep faces inside the green lines; anything past the red line is trimmed off.' } ) );
+			renderBackgroundTools();
+			return;
+		}
+		if ( isText( item ) ) {
+			renderTextTools( item, state.selectedItem );
 			return;
 		}
 		var index = state.selectedItem;
@@ -1636,6 +2049,124 @@
 		}
 	}
 
+	var TEXT_COLOURS = [ [ '#222222', 'Black' ], [ '#5a5550', 'Grey' ], [ '#ffffff', 'White' ], [ '#a8875a', 'Gold' ], [ '#8a5a44', 'Rose brown' ], [ '#1f2a3d', 'Navy' ] ];
+	var BACKGROUNDS = [ [ '', 'White' ], [ '#f7f3ec', 'Ivory' ], [ '#efe6da', 'Sand' ], [ '#e9d9d3', 'Blush' ], [ '#dfe4dc', 'Sage' ], [ '#d9dfe6', 'Mist' ], [ '#3e3d3b', 'Charcoal' ], [ '#151515', 'Black' ] ];
+
+	/** Colour buttons plus a picker for any colour. */
+	function colourPicker( colours, value, label, onpick ) {
+		var row = el( 'div', { class: 'sad-colours', role: 'radiogroup', 'aria-label': label } );
+		colours.forEach( function ( colour ) {
+			var swatch = el( 'button', {
+				type: 'button',
+				role: 'radio',
+				class: 'sad-colour',
+				title: colour[ 1 ],
+				'aria-label': colour[ 1 ],
+				'aria-checked': ( value || '' ) === colour[ 0 ] ? 'true' : 'false',
+				onclick: function () {
+					onpick( colour[ 0 ] );
+				},
+			} );
+			swatch.style.backgroundColor = colour[ 0 ] || '#ffffff';
+			row.appendChild( swatch );
+		} );
+		var custom = el( 'input', { type: 'color', class: 'sad-colour sad-colour--custom', title: 'Any colour', 'aria-label': 'Any colour', value: value || '#ffffff' } );
+		custom.addEventListener( 'change', function () {
+			onpick( custom.value );
+		} );
+		row.appendChild( custom );
+		return row;
+	}
+
+	/** Background colour of the spread (or printed cover) being edited. */
+	function renderBackgroundTools() {
+		var spread = currentSpread();
+		dom.slotTools.appendChild( el( 'p', { class: 'sad-tools__label', text: 'Background colour' } ) );
+		dom.slotTools.appendChild( colourPicker( BACKGROUNDS, spread.bg, 'Background colour', function ( colour ) {
+			checkpoint();
+			spread.bg = colour;
+			changed();
+		} ) );
+		if ( ! onCover() && state.design.spreads.length > 1 ) {
+			dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Use on every spread', onclick: function () {
+				checkpoint();
+				state.design.spreads.forEach( function ( other ) {
+					other.bg = spread.bg;
+				} );
+				changed();
+				toast( 'Every spread now has this background.' );
+			} } ) );
+		}
+		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: '+ Add text', onclick: addText } ) );
+	}
+
+	/** Words, font, size, colour and alignment of the selected text box. */
+	function renderTextTools( item, index ) {
+		dom.slotTools.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Text' } ) );
+		var input = el( 'textarea', { class: 'sad-textarea', rows: '3', 'aria-label': 'Text' } );
+		input.value = item.text;
+		input.addEventListener( 'input', function () {
+			editText( item, function () {
+				item.text = input.value;
+			} );
+		} );
+		dom.textInput = input;
+		dom.slotTools.appendChild( input );
+
+		var font = el( 'select', { class: 'sad-select', 'aria-label': 'Font' } );
+		Object.keys( state.album.fonts || {} ).forEach( function ( id ) {
+			var option = el( 'option', { value: id, text: state.album.fonts[ id ].name } );
+			option.style.fontFamily = '"' + fontFamily( id ) + '"';
+			option.selected = item.font === id;
+			font.appendChild( option );
+			loadFont( id );
+		} );
+		font.addEventListener( 'change', function () {
+			editText( item, function () {
+				item.font = font.value;
+			} );
+		} );
+		dom.slotTools.appendChild( el( 'label', { class: 'sad-field' }, [ el( 'span', { text: 'Font' } ), font ] ) );
+
+		var size = el( 'input', { type: 'number', min: '4', max: '300', step: '1', class: 'sad-num', value: String( item.size ), 'aria-label': 'Text size in points' } );
+		size.addEventListener( 'input', function () {
+			var value = parseFloat( size.value );
+			if ( value >= 4 && value <= 300 ) {
+				editText( item, function () {
+					item.size = value;
+				} );
+			}
+		} );
+		dom.slotTools.appendChild( el( 'label', { class: 'sad-zoom' }, [ 'Size', size, 'pt' ] ) );
+
+		dom.slotTools.appendChild( segmented( [ [ 'left', 'Left' ], [ 'center', 'Centre' ], [ 'right', 'Right' ] ], item.align, function ( align ) {
+			checkpoint();
+			item.align = align;
+			changed();
+		} ) );
+		dom.slotTools.appendChild( el( 'p', { class: 'sad-tools__label', text: 'Colour' } ) );
+		dom.slotTools.appendChild( colourPicker( TEXT_COLOURS, item.color, 'Text colour', function ( colour ) {
+			checkpoint();
+			item.color = colour || '#ffffff';
+			changed();
+		} ) );
+
+		var rotation = el( 'input', { type: 'number', min: '-180', max: '180', step: '1', value: String( Math.round( item.rot ) ), class: 'sad-num', 'aria-label': 'Rotation in degrees' } );
+		rotation.addEventListener( 'change', function () {
+			var value = parseFloat( rotation.value );
+			if ( ! isNaN( value ) ) {
+				checkpoint();
+				item.rot = ( ( value + 540 ) % 360 ) - 180;
+				changed();
+			}
+		} );
+		dom.slotTools.appendChild( el( 'label', { class: 'sad-zoom' }, [ 'Rotate', rotation, '°' ] ) );
+		dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag the side handles to change the width, or a corner to make the text bigger or smaller. Keep text inside the green lines.' } ) );
+		dom.slotTools.appendChild( el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost sad-btn--danger', text: 'Delete text', onclick: function () {
+			deleteItem( index );
+		} } ) );
+	}
+
 	/** Cover material and colour, shown when the cover is open and no photo box is selected. */
 	function renderCoverTools() {
 		var cover = state.design.cover;
@@ -1648,7 +2179,7 @@
 				role: 'radio',
 				class: 'sad-choice__btn',
 				'aria-checked': cover.type === type ? 'true' : 'false',
-				text: covers[ type ].name,
+				text: covers[ type ].name + ( covers[ type ].price > 0 ? ' · +' + money( covers[ type ].price ) : '' ),
 				onclick: function () {
 					if ( cover.type === type ) {
 						return;
@@ -1661,10 +2192,7 @@
 					}
 					if ( covers[ type ].printed && ! cover.items.length ) {
 						// Start with one photo on the front cover.
-						var g = geo();
-						var bx = g.b / g.tw;
-						var by = g.b / g.th;
-						cover.items = [ newItem( null, 0.5, -by, 0.5 + bx, 1 + 2 * by ) ];
+						cover.items = [ frontCoverItem() ];
 					}
 					changed();
 				},
@@ -1696,8 +2224,293 @@
 			dom.slotTools.appendChild( swatches );
 			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'A bound ' + covers[ cover.type ].name.toLowerCase() + ' cover. The colour on screen is a guide; real materials vary slightly.' } ) );
 		} else {
-			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Design the cover like a spread: the left half is the back cover and the right half is the front. Drag photos onto it, or pick a layout.' } ) );
+			var g = geo();
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Design the cover like a spread: the left half is the back cover and the right half is the front' + ( g.spine ? ', with the spine (' + g.spine + ' mm) between them. The spine grows as you add spreads.' : '.' ) + ' Drag photos onto it, or pick a layout. The shaded edge wraps round the board.' } ) );
+			renderBackgroundTools();
 		}
+	}
+
+	/* ---------- notes ---------- */
+
+	function spreadKey() {
+		return onCover() ? 'cover' : currentSpread().id;
+	}
+
+	function openNotes( key ) {
+		return ( state.album.comments || [] ).filter( function ( comment ) {
+			return comment.spread === key && ! comment.resolved;
+		} ).length;
+	}
+
+	function timeAgo( time ) {
+		var mins = Math.round( ( Date.now() / 1000 - time ) / 60 );
+		if ( mins < 2 ) {
+			return 'just now';
+		}
+		if ( mins < 60 ) {
+			return mins + ' minutes ago';
+		}
+		var hours = Math.round( mins / 60 );
+		if ( hours < 36 ) {
+			return hours + ( hours === 1 ? ' hour ago' : ' hours ago' );
+		}
+		return Math.round( hours / 24 ) + ' days ago';
+	}
+
+	/** Notes on the cover or spread being shown, from the client ("You") and the studio. */
+	function renderNotes() {
+		var key = spreadKey();
+		var list = ( state.album.comments || [] ).filter( function ( comment ) {
+			return comment.spread === key;
+		} );
+		dom.notes.innerHTML = '';
+		dom.notes.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Notes on ' + spreadName( state.current ) } ) );
+		list.forEach( function ( comment ) {
+			var done = el( 'input', { type: 'checkbox', 'aria-label': 'Done' } );
+			done.checked = !! comment.resolved;
+			done.addEventListener( 'change', function () {
+				api( '/comments/' + comment.id, { method: 'POST', json: { resolved: done.checked } } ).then( function ( data ) {
+					state.album.comments = data.comments;
+					renderNotes();
+					renderStrip();
+				} ).catch( function ( error ) {
+					toast( error.message, 'error' );
+				} );
+			} );
+			dom.notes.appendChild( el( 'div', { class: 'sad-note sad-note--' + comment.author + ( comment.resolved ? ' sad-note--done' : '' ) }, [
+				el( 'div', { class: 'sad-note__meta' }, [
+					el( 'strong', { text: comment.author === 'studio' ? state.album.studio || 'Studio' : 'You' } ),
+					el( 'span', { text: ' · ' + timeAgo( comment.time ) } ),
+					el( 'label', { class: 'sad-note__done' }, [ done, ' Done' ] ),
+				] ),
+				el( 'p', { class: 'sad-note__text', text: comment.text } ),
+			] ) );
+		} );
+		var input = el( 'textarea', { class: 'sad-textarea', rows: '2', placeholder: list.length ? 'Reply or add a note…' : 'A note for us about this page, e.g. "Can you brighten this photo?"', 'aria-label': 'New note' } );
+		var send = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Add note', onclick: function () {
+			if ( ! input.value.trim() ) {
+				return;
+			}
+			send.disabled = true;
+			api( '/comments', { method: 'POST', json: { spread: key, text: input.value } } ).then( function ( data ) {
+				state.album.comments = data.comments;
+				renderNotes();
+				renderStrip();
+				toast( 'Note sent. We will get back to you.', 'success' );
+			} ).catch( function ( error ) {
+				send.disabled = false;
+				toast( error.message, 'error' );
+			} );
+		} } );
+		dom.notes.appendChild( input );
+		dom.notes.appendChild( send );
+	}
+
+	/* ---------- summary and extras ---------- */
+
+	function money( amount ) {
+		var pricing = state.album.pricing || {};
+		var whole = Math.round( amount ) === amount;
+		return ( pricing.currency || '' ) + amount.toLocaleString( 'en-ZA', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 } ).replace( /\u00a0/g, ' ' );
+	}
+
+	/** Extras beyond the standard album. Matches sad_album_extras(). */
+	function extras() {
+		var pricing = state.album.pricing || {};
+		var lines = [];
+		var extra = state.design.spreads.length - ( pricing.includedSpreads || 0 );
+		if ( extra > 0 && pricing.extraSpreadPrice > 0 ) {
+			lines.push( [ extra + ' extra spread' + ( extra === 1 ? '' : 's' ) + ' × ' + money( pricing.extraSpreadPrice ), extra * pricing.extraSpreadPrice ] );
+		}
+		var material = coverMaterial( state.design.cover );
+		if ( material.price > 0 ) {
+			lines.push( [ material.name + ' cover', material.price ] );
+		}
+		return lines;
+	}
+
+	/** Spreads, pages, cover and any extras, with the printer's spread steps. */
+	function renderSummary() {
+		var count = state.design.spreads.length;
+		var cover = state.design.cover;
+		var colour = coverMaterial( cover ).colours[ cover.colour ];
+		dom.summary.innerHTML = '';
+		dom.summary.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Your album' } ) );
+		dom.summary.appendChild( el( 'p', { class: 'sad-help', text: count + ' spreads (' + count * 2 + ' pages) · ' + coverMaterial( cover ).name + ( colour ? ', ' + colour.name : '' ) + ' cover' } ) );
+		var step = stepAdvice( count );
+		if ( step ) {
+			dom.summary.appendChild( el( 'p', { class: 'sad-help sad-help--warn', text: step } ) );
+		}
+		var lines = extras();
+		if ( lines.length ) {
+			var table = el( 'div', { class: 'sad-extras' } );
+			var total = 0;
+			lines.forEach( function ( line ) {
+				total += line[ 1 ];
+				table.appendChild( el( 'div', { class: 'sad-extras__row' }, [ el( 'span', { text: line[ 0 ] } ), el( 'span', { text: money( line[ 1 ] ) } ) ] ) );
+			} );
+			table.appendChild( el( 'div', { class: 'sad-extras__row sad-extras__total' }, [ el( 'span', { text: 'Extras' } ), el( 'span', { text: money( total ) } ) ] ) );
+			dom.summary.appendChild( table );
+			var pricing = state.album.pricing || {};
+			dom.summary.appendChild( el( 'p', { class: 'sad-help', text: ( pricing.includedSpreads ? pricing.includedSpreads + ' spreads are included. ' : '' ) + 'We will confirm the final price with you; nothing is charged here.' } ) );
+		}
+	}
+
+	/* ---------- book preview ---------- */
+
+	/** The views in the preview: the cover, then each spread. */
+	function previewViews() {
+		return [ state.design.cover ].concat( state.design.spreads );
+	}
+
+	function previewLabel( index ) {
+		return index === 0 ? 'Cover' : 'Spread ' + index + ' of ' + state.design.spreads.length;
+	}
+
+	/** One page (left or right half) of a spread, drawn at the book's size. */
+	function previewHalf( spread, side, width, height ) {
+		var page = el( 'div', { class: 'sad-book__page sad-book__page--' + side } );
+		page.style.width = width / 2 + 'px';
+		page.style.height = height + 'px';
+		var mini = el( 'div', { class: 'sad-mini sad-book__sheet' } );
+		drawThumb( mini, spread, width );
+		mini.style.left = side === 'right' ? -width / 2 + 'px' : '0';
+		page.appendChild( mini );
+		return page;
+	}
+
+	/** Size of the book on screen for a view. */
+	function bookSize( spread ) {
+		var g = geo( spread );
+		var maxW = Math.min( window.innerWidth - ( window.innerWidth > 700 ? 160 : 24 ), 1400 );
+		var maxH = window.innerHeight - 190;
+		var width = Math.min( maxW, maxH * g.tw / g.th );
+		return { w: Math.max( 200, width ), h: Math.max( 200, width ) * g.th / g.tw };
+	}
+
+	function openPreview( approving ) {
+		var views = previewViews();
+		var current = 0;
+		var busy = false;
+		state.previewOpen = true;
+		state.previewed = true;
+		var book = el( 'div', { class: 'sad-book' } );
+		var label = el( 'span', { class: 'sad-preview__label' } );
+		var prev = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: '‹ Back', onclick: function () {
+			turn( -1 );
+		} } );
+		var next = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Next ›', onclick: function () {
+			turn( 1 );
+		} } );
+		var approveBtn = el( 'button', { type: 'button', class: 'sad-btn sad-btn--primary', text: 'Approve for printing', hidden: isLocked(), onclick: function () {
+			close();
+			approve();
+		} } );
+		var hint = el( 'p', { class: 'sad-preview__hint', text: approving ? 'Have one last look through your album, then approve it at the end.' : 'Use the arrows or your arrow keys to turn the pages.' } );
+		var overlay = el( 'div', { class: 'sad-preview', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Book preview' }, [
+			el( 'div', { class: 'sad-preview__bar' }, [
+				el( 'strong', { text: state.album.title } ),
+				label,
+				el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Close', onclick: close } ),
+			] ),
+			el( 'div', { class: 'sad-preview__stage' }, [ book ] ),
+			hint,
+			el( 'div', { class: 'sad-preview__bar sad-preview__bar--bottom' }, [ prev, next, approveBtn ] ),
+		] );
+		root.appendChild( overlay );
+
+		function show( index ) {
+			current = index;
+			var size = bookSize( views[ index ] );
+			book.innerHTML = '';
+			book.style.width = size.w + 'px';
+			book.style.height = size.h + 'px';
+			book.appendChild( previewHalf( views[ index ], 'left', size.w, size.h ) );
+			book.appendChild( previewHalf( views[ index ], 'right', size.w, size.h ) );
+			label.textContent = previewLabel( index );
+			prev.disabled = index === 0;
+			next.disabled = index === views.length - 1;
+			var atEnd = index === views.length - 1;
+			approveBtn.classList.toggle( 'sad-btn--pulse', atEnd && approving );
+			if ( atEnd && approving ) {
+				hint.textContent = 'That is the whole album. Happy with it? Approve it for printing.';
+			}
+		}
+
+		/** Turns one page: the right page lifts and falls to the left (or back again). */
+		function turn( delta ) {
+			var to = current + delta;
+			if ( busy || to < 0 || to >= views.length ) {
+				return;
+			}
+			var from = views[ current ];
+			var dest = views[ to ];
+			var size = bookSize( from );
+			var reduce = window.matchMedia && window.matchMedia( '(prefers-reduced-motion: reduce)' ).matches;
+			if ( reduce || current === 0 || to === 0 ) {
+				// The cover is a different size from the spreads: fade instead of turning.
+				book.classList.add( 'sad-book--fade' );
+				setTimeout( function () {
+					show( to );
+					book.classList.remove( 'sad-book--fade' );
+				}, reduce ? 0 : 180 );
+				return;
+			}
+			busy = true;
+			var forward = delta > 0;
+			book.innerHTML = '';
+			book.appendChild( previewHalf( forward ? from : dest, 'left', size.w, size.h ) );
+			book.appendChild( previewHalf( forward ? dest : from, 'right', size.w, size.h ) );
+			var front = previewHalf( from, forward ? 'right' : 'left', size.w, size.h );
+			var back = previewHalf( dest, forward ? 'left' : 'right', size.w, size.h );
+			front.classList.add( 'sad-leaf__face' );
+			back.classList.add( 'sad-leaf__face', 'sad-leaf__face--back' );
+			var leaf = el( 'div', { class: 'sad-leaf sad-leaf--' + ( forward ? 'forward' : 'back' ) }, [ front, back ] );
+			leaf.style.width = size.w / 2 + 'px';
+			leaf.style.height = size.h + 'px';
+			book.appendChild( leaf );
+			// Start the turn on the next frame so the transition runs.
+			requestAnimationFrame( function () {
+				requestAnimationFrame( function () {
+					leaf.classList.add( 'sad-leaf--turned' );
+				} );
+			} );
+			setTimeout( function () {
+				busy = false;
+				show( to );
+			}, 720 );
+		}
+
+		function onKey( event ) {
+			if ( event.key === 'ArrowRight' ) {
+				turn( 1 );
+			} else if ( event.key === 'ArrowLeft' ) {
+				turn( -1 );
+			} else if ( event.key === 'Escape' ) {
+				close();
+			} else {
+				return;
+			}
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		function onResize() {
+			show( current );
+		}
+
+		function close() {
+			state.previewOpen = false;
+			renderHeader();
+			document.removeEventListener( 'keydown', onKey, true );
+			window.removeEventListener( 'resize', onResize );
+			overlay.remove();
+		}
+
+		document.addEventListener( 'keydown', onKey, true );
+		window.addEventListener( 'resize', onResize );
+		show( 0 );
+		next.focus();
 	}
 
 	/* ---------- panels ---------- */
@@ -1737,7 +2550,7 @@
 	}
 
 	function drawThumb( container, spread, width ) {
-		var g = geo();
+		var g = geo( spread );
 		var scale = width / g.tw;
 		container.innerHTML = '';
 		container.style.width = width + 'px';
@@ -1745,9 +2558,14 @@
 		var cover = spread === state.design.cover;
 		paintCover( container, cover ? spread : null, scale, 0 );
 		if ( ! cover || isPrinted( spread ) ) {
+			container.style.backgroundColor = spread.bg || '';
+		}
+		if ( ! cover || isPrinted( spread ) ) {
 			drawItems( container, spread, scale, 0, false );
 		}
-		container.appendChild( el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } ) );
+		var fold = el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } );
+		fold.style.left = ( g.pw + g.spine / 2 ) * scale + 'px';
+		container.appendChild( fold );
 	}
 
 	function renderStrip() {
@@ -1761,7 +2579,7 @@
 			onclick: function () {
 				goTo( -1 );
 			},
-		}, [ coverMini, el( 'span', { class: 'sad-thumb__num sad-thumb__pages' }, [ el( 'span', { text: 'Back' } ), el( 'span', { text: 'Cover' } ), el( 'span', { text: 'Front' } ) ] ) ] ) );
+		}, [ coverMini, el( 'span', { class: 'sad-thumb__num sad-thumb__pages' }, [ el( 'span', { text: 'Back' } ), el( 'span', { text: 'Cover' } ), el( 'span', { text: 'Front' } ) ] ), noteBadge( 'cover' ) ] ) );
 		state.design.spreads.forEach( function ( spread, index ) {
 			var mini = el( 'div', { class: 'sad-mini' } );
 			drawThumb( mini, spread, 120 );
@@ -1772,7 +2590,7 @@
 				onclick: function () {
 					goTo( index );
 				},
-			}, [ mini, el( 'span', { class: 'sad-thumb__num', text: String( index + 1 ) } ) ] ) );
+			}, [ mini, el( 'span', { class: 'sad-thumb__num', text: String( index + 1 ) } ), noteBadge( spread.id ) ] ) );
 		} );
 		if ( ! isLocked() ) {
 			dom.strip.appendChild( el( 'button', { type: 'button', class: 'sad-thumb sad-thumb--add', text: '+ Add spread', onclick: addSpread } ) );
@@ -1785,6 +2603,11 @@
 				dom.strip.scrollLeft = left - ( dom.strip.clientWidth - active.offsetWidth ) / 2;
 			}
 		}
+	}
+
+	function noteBadge( key ) {
+		var count = openNotes( key );
+		return count ? el( 'span', { class: 'sad-thumb__notes', title: count + ' open note' + ( count === 1 ? '' : 's' ), text: '✎ ' + count } ) : null;
 	}
 
 	function renderTray() {
@@ -1932,6 +2755,7 @@
 		dom.status.hidden = isLocked();
 		dom.editTools.hidden = isLocked();
 		dom.upload.hidden = isLocked();
+		dom.approve.textContent = state.previewed ? 'Approve for printing' : 'Preview & approve';
 	}
 
 	function renderAll() {
@@ -1943,6 +2767,8 @@
 		renderTray();
 		renderAutoFill();
 		renderUndo();
+		renderNotes();
+		renderSummary();
 		// Layouts and auto-fill are only for editing.
 		var editable = ! isLocked();
 		dom.tabs.layouts.button.hidden = ! editable;
@@ -2025,7 +2851,7 @@
 
 	function enableKeys() {
 		document.addEventListener( 'keydown', function ( event ) {
-			if ( ! state.album || isLocked() || typing( event ) ) {
+			if ( ! state.album || isLocked() || typing( event ) || state.previewOpen ) {
 				return;
 			}
 			var mod = event.ctrlKey || event.metaKey;
@@ -2098,6 +2924,7 @@
 			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Add an empty photo box', text: '+ Photo box', onclick: function () {
 				addItem( null );
 			} } ),
+			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Add text to this page', text: '+ Text', onclick: addText } ),
 		] );
 		dom.spreadTools = el( 'span', { class: 'sad-spread-tools' }, [
 			el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Move spread earlier', text: '← Move', onclick: function () {
@@ -2122,6 +2949,8 @@
 			el( 'span', { class: 'sad-legend__safe', text: 'Safe area: keep faces and text inside' } ),
 		] );
 		dom.slotTools = el( 'div', { class: 'sad-slot-tools' } );
+		dom.notes = el( 'div', { class: 'sad-notes' } );
+		dom.summary = el( 'div', { class: 'sad-summary' } );
 		dom.layouts = el( 'div', { class: 'sad-layouts' } );
 		dom.layoutsSection = el( 'section', { class: 'sad-section' }, [
 			el( 'h3', { text: 'Layouts' } ),
@@ -2192,7 +3021,13 @@
 				el( 'div', {}, [ dom.title, dom.size ] ),
 			] ),
 			dom.editTools,
-			el( 'div', { class: 'sad-header__actions' }, [ dom.status, dom.approve ] ),
+			el( 'div', { class: 'sad-header__actions' }, [
+				dom.status,
+				el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', title: 'Turn the pages of your album like a book', text: 'Preview book', onclick: function () {
+					openPreview( false );
+				} } ),
+				dom.approve,
+			] ),
 		] ) );
 		root.appendChild( dom.banner );
 		// Computers: photos and layouts on the left, the spread in the middle, box settings on the
@@ -2205,7 +3040,7 @@
 				dom.stageWrap,
 				el( 'section', { class: 'sad-section sad-strip-section' }, [ dom.strip ] ),
 			] ),
-			el( 'aside', { class: 'sad-tools' }, [ dom.lowres, dom.slotTools, dom.legend ] ),
+			el( 'aside', { class: 'sad-tools' }, [ dom.lowres, dom.slotTools, dom.notes, dom.summary, dom.legend ] ),
 		] ) );
 		setTab( 'photos' );
 		dom.dropOverlay = el( 'div', { class: 'sad-drop-overlay', hidden: true }, [ el( 'span', { text: 'Drop your photos to add them' } ) ] );
@@ -2321,7 +3156,26 @@
 		state.armedPhoto = null;
 		state.history = [];
 		state.future = [];
+		if ( ! isLocked() && fitCoverToSpecs() ) {
+			scheduleSave();
+		}
 		renderAll();
+		// Redraw once the fonts used for text have loaded.
+		var used = {};
+		previewViews().forEach( function ( spread ) {
+			spread.items.forEach( function ( item ) {
+				if ( isText( item ) ) {
+					used[ item.font ] = true;
+				}
+			} );
+		} );
+		var loads = Object.keys( used ).map( loadFont );
+		if ( loads.length ) {
+			Promise.all( loads ).then( function () {
+				renderStage();
+				renderStrip();
+			} );
+		}
 	}
 
 	function load() {

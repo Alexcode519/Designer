@@ -32,6 +32,18 @@ function sad_get_settings() {
 		'start_code'   => '',
 		'min_spreads'  => 10,
 		'max_spreads'  => 30,
+		// Printer specs for the cover and page count.
+		'cover_wrap_mm'       => 0,
+		'spine_base_mm'       => 0,
+		'spine_per_spread_mm' => 0,
+		'spread_step'         => 1,
+		// Reminders for clients who stop designing.
+		'reminder_days'       => 7,
+		'reminder_max'        => 2,
+		// Extras shown to clients. No payment is taken.
+		'currency'            => 'R',
+		'included_spreads'    => 10,
+		'extra_spread_price'  => 0,
 	);
 	$saved = get_option( 'sad_settings', array() );
 	return wp_parse_args( is_array( $saved ) ? $saved : array(), $defaults );
@@ -119,6 +131,15 @@ function sad_render_settings_page() {
 				'start_code'   => sanitize_text_field( wp_unslash( $_POST['sad_start_code'] ?? '' ) ),
 				'min_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_min_spreads'] ?? 10 ) ) ),
 				'max_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_max_spreads'] ?? 30 ) ) ),
+				'cover_wrap_mm'       => max( 0, (float) ( $_POST['sad_cover_wrap_mm'] ?? 0 ) ),
+				'spine_base_mm'       => max( 0, (float) ( $_POST['sad_spine_base_mm'] ?? 0 ) ),
+				'spine_per_spread_mm' => max( 0, (float) ( $_POST['sad_spine_per_spread_mm'] ?? 0 ) ),
+				'spread_step'         => max( 1, min( 10, (int) ( $_POST['sad_spread_step'] ?? 1 ) ) ),
+				'reminder_days'       => max( 0, min( 90, (int) ( $_POST['sad_reminder_days'] ?? 7 ) ) ),
+				'reminder_max'        => max( 1, min( 10, (int) ( $_POST['sad_reminder_max'] ?? 2 ) ) ),
+				'currency'            => sanitize_text_field( wp_unslash( $_POST['sad_currency'] ?? 'R' ) ),
+				'included_spreads'    => max( 0, min( 100, (int) ( $_POST['sad_included_spreads'] ?? 10 ) ) ),
+				'extra_spread_price'  => max( 0, (float) ( $_POST['sad_extra_spread_price'] ?? 0 ) ),
 			)
 		);
 		echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
@@ -142,6 +163,20 @@ function sad_render_settings_page() {
 				<tr>
 					<th scope="row"><label for="sad_bleed_mm">Bleed (mm per edge)</label></th>
 					<td><input id="sad_bleed_mm" name="sad_bleed_mm" type="number" step="0.5" min="0" value="<?php echo esc_attr( $settings['bleed_mm'] ); ?>" class="small-text"></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="sad_safe_mm">Safe margin (mm)</label></th>
+					<td>
+						<input id="sad_safe_mm" name="sad_safe_mm" type="number" step="0.5" min="0" value="<?php echo esc_attr( $settings['safe_mm'] ); ?>" class="small-text">
+						<p class="description">Clients see a green line this far inside the trim and the middle fold, to keep faces and text clear of the edges and the binding.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="sad_cover_types">Cover types</label></th>
+					<td>
+						<textarea id="sad_cover_types" name="sad_cover_types" rows="6" class="large-text code"><?php echo esc_textarea( $settings['cover_types'] ); ?></textarea>
+						<p class="description">One cover type per line. A cover the client designs with photos: <code>Hardcover photo | printed</code>. A bound cover in colours: <code>Leather | Black #1c1a19, Tan #b0835a</code>. Add a price on the end for an upgrade: <code>Leather | Black #1c1a19, Tan #b0835a | 800</code>. The first type is the default.</p>
+					</td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="sad_dpi">Export resolution (dpi)</label></th>
@@ -178,6 +213,70 @@ function sad_render_settings_page() {
 						<p class="description">Used for albums clients start themselves. You can change it per album afterwards.</p>
 					</td>
 				</tr>
+				<tr>
+					<th scope="row"><label for="sad_spread_step">Spreads come in steps of</label></th>
+					<td>
+						<input id="sad_spread_step" name="sad_spread_step" type="number" min="1" max="10" value="<?php echo esc_attr( $settings['spread_step'] ); ?>" class="small-text">
+						<p class="description">If your printer only binds certain page counts, e.g. 2 means the album must have an even number of spreads (10, 12, 14...). Leave at 1 for any number. One spread is two pages.</p>
+					</td>
+				</tr>
+			</table>
+
+			<h2>Printed cover (from your printer's spec sheet)</h2>
+			<p>Printed photo covers are one sheet: back cover, spine and front cover, plus extra all round that wraps over the boards. Leave these at 0 to make the cover the same size as a spread.</p>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="sad_cover_wrap_mm">Cover wrap (mm per edge)</label></th>
+					<td>
+						<input id="sad_cover_wrap_mm" name="sad_cover_wrap_mm" type="number" step="0.5" min="0" value="<?php echo esc_attr( $settings['cover_wrap_mm'] ); ?>" class="small-text">
+						<p class="description">How far the printed cover runs past the trim on each edge to wrap round the board, bleed included. 0 uses the normal bleed.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Spine width</th>
+					<td>
+						<label><input name="sad_spine_base_mm" type="number" step="0.1" min="0" value="<?php echo esc_attr( $settings['spine_base_mm'] ); ?>" class="small-text"> mm</label>
+						plus
+						<label><input name="sad_spine_per_spread_mm" type="number" step="0.01" min="0" value="<?php echo esc_attr( $settings['spine_per_spread_mm'] ); ?>" class="small-text"> mm for each spread</label>
+						<p class="description">The spine grows as spreads are added. Example: 8 mm plus 0.5 mm per spread gives 13 mm for 10 spreads.</p>
+					</td>
+				</tr>
+			</table>
+
+			<h2>Reminders</h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="sad_reminder_days">Remind clients after</label></th>
+					<td>
+						<input id="sad_reminder_days" name="sad_reminder_days" type="number" min="0" max="90" value="<?php echo esc_attr( $settings['reminder_days'] ); ?>" class="small-text"> days without changes,
+						up to <input name="sad_reminder_max" type="number" min="1" max="10" value="<?php echo esc_attr( $settings['reminder_max'] ); ?>" class="small-text"> times
+						<p class="description">Clients who have not approved get a friendly email with their link. Set 0 days to turn reminders off.</p>
+					</td>
+				</tr>
+			</table>
+
+			<h2>Extras and prices</h2>
+			<p>Shown to clients so they know the cost of extra spreads and cover upgrades. No payment is taken; you invoice as usual. Leave prices at 0 to hide them.</p>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="sad_currency">Currency symbol</label></th>
+					<td><input id="sad_currency" name="sad_currency" type="text" value="<?php echo esc_attr( $settings['currency'] ); ?>" class="small-text"></td>
+				</tr>
+				<tr>
+					<th scope="row">Extra spreads</th>
+					<td>
+						<label><input name="sad_included_spreads" type="number" min="0" max="100" value="<?php echo esc_attr( $settings['included_spreads'] ); ?>" class="small-text"> spreads included</label>,
+						then <label><input name="sad_extra_spread_price" type="number" min="0" step="0.01" value="<?php echo esc_attr( $settings['extra_spread_price'] ); ?>" class="small-text"> per extra spread</label>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Cover upgrades</th>
+					<td><p class="description">Add a price to a cover type under Cover types above, e.g. <code>Leather | Black #1c1a19, Tan #b0835a | 800</code>.</p></td>
+				</tr>
+			</table>
+
+			<h2>Other</h2>
+			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="sad_notify_email">Notification emails go to</label></th>
 					<td><input id="sad_notify_email" name="sad_notify_email" type="email" value="<?php echo esc_attr( $settings['notify_email'] ); ?>" class="regular-text"></td>
