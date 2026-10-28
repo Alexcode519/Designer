@@ -1403,7 +1403,7 @@
 		dom.dims.style.transform = item.rot ? 'translate(-50%, 6px) rotate(' + -item.rot + 'deg)' : '';
 		dom.dims.textContent = state.adjusting
 			? 'Drag to move the photo inside the box · scroll to zoom'
-			: Math.round( m.w ) + ' × ' + Math.round( m.h ) + ' mm' + ( item.rot ? ' · ' + Math.round( item.rot ) + '°' : '' );
+			: ( item.photo && state.photos[ item.photo ] ? state.photos[ item.photo ].name + ' · ' : '' ) + Math.round( m.w ) + ' × ' + Math.round( m.h ) + ' mm' + ( item.rot ? ' · ' + Math.round( item.rot ) + '°' : '' );
 
 		// Quick buttons above the box (below it when the box is at the top).
 		var a = Math.abs( item.rot * Math.PI / 180 );
@@ -1412,7 +1412,12 @@
 		var bottom = ( g.b + m.y + m.h / 2 + bh / 2 ) * state.scale;
 		var half = dom.bar.offsetWidth / 2;
 		dom.bar.style.left = clamp( ( g.b + m.x + m.w / 2 ) * state.scale, half - 20, dom.stage.clientWidth - half + 20 ) + 'px';
-		dom.bar.style.top = ( top > 52 ? top - 44 : Math.min( bottom + 44, dom.stage.clientHeight - 4 ) ) + 'px';
+		// Above the box, else below it (clear of the rotate handle), else inside its top edge.
+		var barTop = top - 44;
+		if ( top <= 52 ) {
+			barTop = bottom + 84 <= dom.stage.clientHeight + 48 ? bottom + 44 : top + 36;
+		}
+		dom.bar.style.top = barTop + 'px';
 	}
 
 	function iconButton( label, text, onclick, pressed ) {
@@ -1539,6 +1544,15 @@
 		var index = state.selectedItem;
 		var photo = item.photo && state.photos[ item.photo ];
 		dom.slotTools.appendChild( el( 'h3', { class: 'sad-tools__title', text: photo ? 'Photo' : 'Empty photo box' } ) );
+		if ( photo ) {
+			dom.slotTools.appendChild( el( 'div', { class: 'sad-tools__photo' }, [
+				el( 'img', { src: photo.preview, alt: '', draggable: 'false' } ),
+				el( 'span', {}, [
+					el( 'strong', { class: 'sad-tools__name', title: photo.name, text: photo.name } ),
+					el( 'span', { class: 'sad-help', text: photo.width + ' × ' + photo.height + ' px' } ),
+				] ),
+			] ) );
+		}
 		if ( photo ) {
 			dom.slotTools.appendChild( segmented( [ [ 'fill', 'Fill box' ], [ 'fit', 'Show whole photo' ] ], item.fit, function ( fit ) {
 				setFit( item, fit );

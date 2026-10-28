@@ -1879,3 +1879,42 @@ html.sad-locked body {
 #sad-app .sad-guides--hidden {
 	display: none;
 }
+
+#sad-app .sad-dims {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#sad-app .sad-tools__photo {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	padding: 8px;
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #faf8f5;
+}
+
+#sad-app .sad-tools__photo img {
+	width: 48px;
+	height: 48px;
+	object-fit: cover;
+	border-radius: 4px;
+	flex: none;
+}
+
+#sad-app .sad-tools__photo > span {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+#sad-app .sad-tools__name {
+	font-size: 0.85rem;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
