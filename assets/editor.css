@@ -1,4 +1,9 @@
-/* Snippets Album Designer: client editor. Fonts are inherited from the site theme. */
+/*
+ * Snippets Album Designer: client editor. Fonts are inherited from the site theme.
+ *
+ * Rules are scoped to the editor's id so the site theme's (often Elementor's) button and form
+ * styles can't override them.
+ */
 
 .sad-app {
 	--sad-ink: #1d1d1b;
@@ -22,14 +27,14 @@
 	box-sizing: border-box;
 }
 
-.sad-loading,
-.sad-message {
+:is(#sad-app, #sad-start) .sad-loading,
+:is(#sad-app, #sad-start) .sad-message {
 	padding: 48px 16px;
 	text-align: center;
 	color: var(--sad-muted);
 }
 
-.sad-header {
+:is(#sad-app, #sad-start) .sad-header {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 12px;
@@ -38,36 +43,36 @@
 	margin-bottom: 12px;
 }
 
-.sad-title {
+:is(#sad-app, #sad-start) .sad-title {
 	margin: 0;
 	font-size: 1.5rem;
 	line-height: 1.2;
 }
 
-.sad-size {
+:is(#sad-app, #sad-start) .sad-size {
 	color: var(--sad-muted);
 	font-size: 0.9rem;
 }
 
-.sad-header__actions {
+:is(#sad-app, #sad-start) .sad-header__actions {
 	display: flex;
 	gap: 12px;
 	align-items: center;
 }
 
-.sad-status {
+:is(#sad-app, #sad-start) .sad-status {
 	color: var(--sad-muted);
 	font-size: 0.85rem;
 }
 
-.sad-banner {
+:is(#sad-app, #sad-start) .sad-banner {
 	background: #eef3ea;
 	border: 1px solid #c9d8bf;
 	padding: 12px 16px;
 	margin-bottom: 12px;
 }
 
-.sad-btn {
+:is(#sad-app, #sad-start) .sad-btn {
 	appearance: none;
 	border: 1px solid var(--sad-accent);
 	background: #fff;
@@ -80,34 +85,34 @@
 	border-radius: 2px;
 }
 
-.sad-btn:disabled {
+:is(#sad-app, #sad-start) .sad-btn:disabled {
 	opacity: 0.4;
 	cursor: default;
 }
 
-.sad-btn--primary {
+:is(#sad-app, #sad-start) .sad-btn--primary {
 	background: var(--sad-accent);
 	color: #fff;
 }
 
-.sad-btn--ghost {
+:is(#sad-app, #sad-start) .sad-btn--ghost {
 	border-color: var(--sad-line);
 }
 
-.sad-btn--danger {
+:is(#sad-app, #sad-start) .sad-btn--danger {
 	color: var(--sad-danger);
 }
 
-.sad-btn:focus-visible,
-.sad-item:focus-visible,
-.sad-photo:focus-visible,
-.sad-thumb:focus-visible,
-.sad-layout:focus-visible {
+:is(#sad-app, #sad-start) .sad-btn:focus-visible,
+:is(#sad-app, #sad-start) .sad-item:focus-visible,
+:is(#sad-app, #sad-start) .sad-photo:focus-visible,
+:is(#sad-app, #sad-start) .sad-thumb:focus-visible,
+:is(#sad-app, #sad-start) .sad-layout:focus-visible {
 	outline: 2px solid var(--sad-select);
 	outline-offset: 2px;
 }
 
-.sad-nav {
+:is(#sad-app, #sad-start) .sad-nav {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
@@ -115,20 +120,20 @@
 	margin-bottom: 8px;
 }
 
-.sad-spread-label {
+:is(#sad-app, #sad-start) .sad-spread-label {
 	min-width: 110px;
 	text-align: center;
 	font-size: 0.9rem;
 }
 
-.sad-spread-tools {
+:is(#sad-app, #sad-start) .sad-spread-tools {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 	margin-left: auto;
 }
 
-.sad-stage-wrap {
+:is(#sad-app, #sad-start) .sad-stage-wrap {
 	background: var(--sad-bg);
 	padding: 16px;
 	display: flex;
@@ -136,7 +141,7 @@
 	overflow: hidden;
 }
 
-.sad-mini {
+:is(#sad-app, #sad-start) .sad-mini {
 	position: relative;
 	background: #fff;
 	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
@@ -144,7 +149,7 @@
 	overflow: hidden;
 }
 
-.sad-fold {
+:is(#sad-app, #sad-start) .sad-fold {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -161,7 +166,7 @@
 
 
 
-.sad-slot-tools {
+:is(#sad-app, #sad-start) .sad-slot-tools {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 10px;
@@ -170,34 +175,34 @@
 	padding: 10px 0;
 }
 
-.sad-zoom {
+:is(#sad-app, #sad-start) .sad-zoom {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	font-size: 0.9rem;
 }
 
-.sad-zoom input {
+:is(#sad-app, #sad-start) .sad-zoom input {
 	width: 180px;
 	max-width: 50vw;
 }
 
-.sad-help {
+:is(#sad-app, #sad-start) .sad-help {
 	color: var(--sad-muted);
 	font-size: 0.85rem;
 	margin: 0;
 }
 
-.sad-section {
+:is(#sad-app, #sad-start) .sad-section {
 	margin-top: 20px;
 }
 
-.sad-section h3 {
+:is(#sad-app, #sad-start) .sad-section h3 {
 	font-size: 1rem;
 	margin: 0 0 8px;
 }
 
-.sad-row {
+:is(#sad-app, #sad-start) .sad-row {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 12px;
@@ -205,18 +210,18 @@
 	margin-bottom: 8px;
 }
 
-.sad-row h3 {
+:is(#sad-app, #sad-start) .sad-row h3 {
 	margin: 0;
 }
 
-.sad-strip {
+:is(#sad-app, #sad-start) .sad-strip {
 	display: flex;
 	gap: 10px;
 	overflow-x: auto;
 	padding: 4px 2px 10px;
 }
 
-.sad-thumb {
+:is(#sad-app, #sad-start) .sad-thumb {
 	appearance: none;
 	border: 2px solid transparent;
 	background: none;
@@ -226,11 +231,11 @@
 	position: relative;
 }
 
-.sad-thumb--active {
+:is(#sad-app, #sad-start) .sad-thumb--active {
 	border-color: var(--sad-select);
 }
 
-.sad-thumb__num {
+:is(#sad-app, #sad-start) .sad-thumb__num {
 	display: block;
 	font-size: 0.75rem;
 	color: var(--sad-muted);
@@ -238,7 +243,7 @@
 	margin-top: 2px;
 }
 
-.sad-thumb--add {
+:is(#sad-app, #sad-start) .sad-thumb--add {
 	border: 1px dashed var(--sad-muted);
 	min-width: 120px;
 	color: var(--sad-muted);
@@ -247,13 +252,13 @@
 }
 
 
-.sad-layouts {
+:is(#sad-app, #sad-start) .sad-layouts {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 }
 
-.sad-layout {
+:is(#sad-app, #sad-start) .sad-layout {
 	appearance: none;
 	background: #fff;
 	border: 1px solid var(--sad-line);
@@ -262,43 +267,43 @@
 	width: 92px;
 }
 
-.sad-layout--active {
+:is(#sad-app, #sad-start) .sad-layout--active {
 	border-color: var(--sad-select);
 	box-shadow: 0 0 0 1px var(--sad-select);
 }
 
-.sad-layout__icon {
+:is(#sad-app, #sad-start) .sad-layout__icon {
 	position: relative;
 	display: block;
 	width: 100%;
 	background: #f1efea;
 }
 
-.sad-layout__box {
+:is(#sad-app, #sad-start) .sad-layout__box {
 	position: absolute;
 	background: #9a968c;
 	outline: 1px solid #f1efea;
 }
 
-.sad-tray-section {
+:is(#sad-app, #sad-start) .sad-tray-section {
 	border: 1px dashed transparent;
 	padding: 8px;
 	margin-left: -8px;
 	margin-right: -8px;
 }
 
-.sad-tray-section--over {
+:is(#sad-app, #sad-start) .sad-tray-section--over {
 	border-color: var(--sad-select);
 	background: #faf6ef;
 }
 
-.sad-upload {
+:is(#sad-app, #sad-start) .sad-upload {
 	position: relative;
 	overflow: hidden;
 	display: inline-block;
 }
 
-.sad-file {
+:is(#sad-app, #sad-start) .sad-file {
 	position: absolute;
 	inset: 0;
 	opacity: 0;
@@ -306,18 +311,18 @@
 	font-size: 0;
 }
 
-.sad-count {
+:is(#sad-app, #sad-start) .sad-count {
 	color: var(--sad-muted);
 	font-weight: normal;
 }
 
-.sad-tray {
+:is(#sad-app, #sad-start) .sad-tray {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 	gap: 8px;
 }
 
-.sad-photo {
+:is(#sad-app, #sad-start) .sad-photo {
 	position: relative;
 	aspect-ratio: 1;
 	background: var(--sad-bg);
@@ -325,7 +330,7 @@
 	border: 2px solid transparent;
 }
 
-.sad-photo img {
+:is(#sad-app, #sad-start) .sad-photo img {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
@@ -333,15 +338,15 @@
 	pointer-events: none;
 }
 
-.sad-photo--armed {
+:is(#sad-app, #sad-start) .sad-photo--armed {
 	border-color: var(--sad-select);
 }
 
-.sad-photo--used img {
+:is(#sad-app, #sad-start) .sad-photo--used img {
 	opacity: 0.55;
 }
 
-.sad-photo__used {
+:is(#sad-app, #sad-start) .sad-photo__used {
 	position: absolute;
 	left: 4px;
 	bottom: 4px;
@@ -355,7 +360,7 @@
 	border-radius: 50%;
 }
 
-.sad-photo__delete {
+:is(#sad-app, #sad-start) .sad-photo__delete {
 	position: absolute;
 	top: 2px;
 	right: 2px;
@@ -372,18 +377,18 @@
 	opacity: 0;
 }
 
-.sad-photo:hover .sad-photo__delete,
-.sad-photo:focus-within .sad-photo__delete {
+:is(#sad-app, #sad-start) .sad-photo:hover .sad-photo__delete,
+:is(#sad-app, #sad-start) .sad-photo:focus-within .sad-photo__delete {
 	opacity: 1;
 }
 
 @media (hover: none) {
-	.sad-photo__delete {
+	:is(#sad-app, #sad-start) .sad-photo__delete {
 		opacity: 1;
 	}
 }
 
-.sad-toasts {
+:is(#sad-app, #sad-start) .sad-toasts {
 	position: fixed;
 	left: 50%;
 	bottom: 16px;
@@ -395,7 +400,7 @@
 	width: min(480px, calc(100vw - 32px));
 }
 
-.sad-toast {
+:is(#sad-app, #sad-start) .sad-toast {
 	background: var(--sad-ink);
 	color: #fff;
 	padding: 10px 14px;
@@ -403,11 +408,11 @@
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-.sad-toast--error {
+:is(#sad-app, #sad-start) .sad-toast--error {
 	background: var(--sad-danger);
 }
 
-.sad-toast--success {
+:is(#sad-app, #sad-start) .sad-toast--success {
 	background: #3d6b35;
 }
 
@@ -416,16 +421,16 @@
 		padding: 12px;
 	}
 
-	.sad-stage-wrap {
+	:is(#sad-app, #sad-start) .sad-stage-wrap {
 		padding: 8px;
 		margin: 0 -12px;
 	}
 
-	.sad-spread-tools {
+	:is(#sad-app, #sad-start) .sad-spread-tools {
 		margin-left: 0;
 	}
 
-	.sad-header__actions {
+	:is(#sad-app, #sad-start) .sad-header__actions {
 		width: 100%;
 		justify-content: space-between;
 	}
@@ -436,11 +441,11 @@
 }
 
 
-.sad-photo--selected {
+:is(#sad-app, #sad-start) .sad-photo--selected {
 	border-color: var(--sad-select);
 }
 
-.sad-photo__check {
+:is(#sad-app, #sad-start) .sad-photo__check {
 	position: absolute;
 	top: 6px;
 	left: 6px;
@@ -455,27 +460,27 @@
 	color: #fff;
 }
 
-.sad-photo--selected .sad-photo__check {
+:is(#sad-app, #sad-start) .sad-photo--selected .sad-photo__check {
 	background: var(--sad-select);
 }
 
-.sad-auto {
+:is(#sad-app, #sad-start) .sad-auto {
 	background: var(--sad-bg);
 	padding: 16px;
 }
 
-.sad-auto > .sad-help {
+:is(#sad-app, #sad-start) .sad-auto > .sad-help {
 	margin-bottom: 10px;
 }
 
-.sad-templates {
+:is(#sad-app, #sad-start) .sad-templates {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 	gap: 10px;
 	margin-bottom: 12px;
 }
 
-.sad-template {
+:is(#sad-app, #sad-start) .sad-template {
 	appearance: none;
 	text-align: left;
 	background: #fff;
@@ -489,12 +494,12 @@
 	gap: 4px;
 }
 
-.sad-template--active {
+:is(#sad-app, #sad-start) .sad-template--active {
 	border-color: var(--sad-select);
 	box-shadow: 0 0 0 1px var(--sad-select);
 }
 
-.sad-template__icons {
+:is(#sad-app, #sad-start) .sad-template__icons {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 4px;
@@ -503,37 +508,37 @@
 
 /* Start page */
 
-.sad-start__grid {
+:is(#sad-app, #sad-start) .sad-start__grid {
 	display: grid;
 	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 	gap: 20px;
 	align-items: start;
 }
 
-.sad-card {
+:is(#sad-app, #sad-start) .sad-card {
 	background: #fff;
 	border: 1px solid var(--sad-line);
 	padding: 20px;
 }
 
-.sad-card h3 {
+:is(#sad-app, #sad-start) .sad-card h3 {
 	margin: 0 0 6px;
 	font-size: 1.1rem;
 }
 
-.sad-card .sad-title {
+:is(#sad-app, #sad-start) .sad-card .sad-title {
 	margin-bottom: 6px;
 }
 
-.sad-card label {
+:is(#sad-app, #sad-start) .sad-card label {
 	display: block;
 	font-size: 0.9rem;
 	margin-bottom: 4px;
 }
 
-.sad-card input[type="text"],
-.sad-card input[type="email"],
-.sad-card select {
+:is(#sad-app, #sad-start) .sad-card input[type="text"],
+:is(#sad-app, #sad-start) .sad-card input[type="email"],
+:is(#sad-app, #sad-start) .sad-card select {
 	width: 100%;
 	padding: 10px;
 	border: 1px solid #c9c6bf;
@@ -543,11 +548,11 @@
 	color: inherit;
 }
 
-.sad-card p {
+:is(#sad-app, #sad-start) .sad-card p {
 	margin: 0 0 14px;
 }
 
-.sad-hp {
+:is(#sad-app, #sad-start) .sad-hp {
 	position: absolute !important;
 	left: -9999px !important;
 	width: 1px;
@@ -555,20 +560,20 @@
 	overflow: hidden;
 }
 
-.sad-notice {
+:is(#sad-app, #sad-start) .sad-notice {
 	background: #eef3ea;
 	border: 1px solid #c9d8bf;
 	padding: 12px 16px;
 	margin-bottom: 16px;
 }
 
-.sad-notice--error {
+:is(#sad-app, #sad-start) .sad-notice--error {
 	background: #f8ebe8;
 	border-color: #e2bdb5;
 }
 
 @media (max-width: 700px) {
-	.sad-start__grid {
+	:is(#sad-app, #sad-start) .sad-start__grid {
 		grid-template-columns: 1fr;
 	}
 }
@@ -580,14 +585,14 @@
 	max-width: 1400px;
 }
 
-.sad-workspace {
+:is(#sad-app, #sad-start) .sad-workspace {
 	display: grid;
 	grid-template-columns: 300px minmax(0, 1fr);
 	gap: 20px;
 	align-items: start;
 }
 
-.sad-side {
+:is(#sad-app, #sad-start) .sad-side {
 	position: sticky;
 	top: var(--sad-top);
 	max-height: calc(100vh - var(--sad-top) - 16px);
@@ -597,7 +602,7 @@
 	border: 1px solid var(--sad-line);
 }
 
-.sad-side .sad-tray-section {
+:is(#sad-app, #sad-start) .sad-side .sad-tray-section {
 	margin: 0;
 	padding: 12px;
 	display: flex;
@@ -607,20 +612,20 @@
 	border: 0;
 }
 
-.sad-side .sad-row {
+:is(#sad-app, #sad-start) .sad-side .sad-row {
 	gap: 8px;
 }
 
-.sad-side .sad-row h3 {
+:is(#sad-app, #sad-start) .sad-side .sad-row h3 {
 	width: 100%;
 }
 
-.sad-side .sad-btn {
+:is(#sad-app, #sad-start) .sad-side .sad-btn {
 	padding: 6px 10px;
 	font-size: 0.85rem;
 }
 
-.sad-side .sad-tray {
+:is(#sad-app, #sad-start) .sad-side .sad-tray {
 	overflow-y: auto;
 	min-height: 0;
 	flex: 1;
@@ -629,7 +634,7 @@
 	padding-right: 2px;
 }
 
-.sad-btn--icon {
+:is(#sad-app, #sad-start) .sad-btn--icon {
 	width: 34px;
 	padding-left: 0;
 	padding-right: 0;
@@ -638,7 +643,7 @@
 	line-height: 1;
 }
 
-.sad-drop-overlay {
+:is(#sad-app, #sad-start) .sad-drop-overlay {
 	position: fixed;
 	inset: 0;
 	z-index: 99998;
@@ -649,7 +654,7 @@
 	pointer-events: none;
 }
 
-.sad-drop-overlay span {
+:is(#sad-app, #sad-start) .sad-drop-overlay span {
 	background: #fff;
 	color: var(--sad-ink);
 	padding: 18px 28px;
@@ -660,11 +665,11 @@
 /* Narrow screens: the tray becomes a strip pinned to the bottom of the screen */
 
 @media (max-width: 900px) {
-	.sad-workspace {
+	:is(#sad-app, #sad-start) .sad-workspace {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.sad-side {
+	:is(#sad-app, #sad-start) .sad-side {
 		order: 2;
 		position: sticky;
 		top: auto;
@@ -675,29 +680,29 @@
 		box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
 	}
 
-	.sad-side .sad-tray-section {
+	:is(#sad-app, #sad-start) .sad-side .sad-tray-section {
 		padding: 8px 12px;
 	}
 
-	.sad-side .sad-row h3 {
+	:is(#sad-app, #sad-start) .sad-side .sad-row h3 {
 		width: auto;
 		font-size: 0.95rem;
 	}
 
-	.sad-side .sad-tray {
+	:is(#sad-app, #sad-start) .sad-side .sad-tray {
 		display: flex;
 		overflow-x: auto;
 		overflow-y: hidden;
 		padding-bottom: 4px;
 	}
 
-	.sad-side .sad-photo {
+	:is(#sad-app, #sad-start) .sad-side .sad-photo {
 		flex: 0 0 72px;
 		width: 72px;
 		height: 72px;
 	}
 
-	.sad-side .sad-tray > .sad-help {
+	:is(#sad-app, #sad-start) .sad-side .sad-tray > .sad-help {
 		white-space: normal;
 	}
 }
@@ -712,30 +717,30 @@
 
 /* Spread stage: free photo boxes over the full print area, with bleed and safe-area guides */
 
-.sad-stage {
+:is(#sad-app, #sad-start) .sad-stage {
 	position: relative;
 	flex: none;
 	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
 	touch-action: none;
 }
 
-.sad-stage-wrap {
+:is(#sad-app, #sad-start) .sad-stage-wrap {
 	padding: 28px 28px 56px;
 	overflow: visible;
 }
 
-.sad-canvas {
+:is(#sad-app, #sad-start) .sad-canvas {
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
 	background: #fff;
 }
 
-.sad-canvas--armed {
+:is(#sad-app, #sad-start) .sad-canvas--armed {
 	cursor: copy;
 }
 
-.sad-item {
+:is(#sad-app, #sad-start) .sad-item {
 	position: absolute;
 	cursor: move;
 	touch-action: none;
@@ -745,24 +750,24 @@
 	outline: none;
 }
 
-.sad-mini .sad-item {
+:is(#sad-app, #sad-start) .sad-mini .sad-item {
 	cursor: inherit;
 	pointer-events: none;
 }
 
-.sad-item__img {
+:is(#sad-app, #sad-start) .sad-item__img {
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
 	background-repeat: no-repeat;
 }
 
-.sad-item__img--empty {
+:is(#sad-app, #sad-start) .sad-item__img--empty {
 	background: #ecebe7;
 	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
-.sad-item__hint {
+:is(#sad-app, #sad-start) .sad-item__hint {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -775,7 +780,7 @@
 	pointer-events: none;
 }
 
-.sad-item__warn {
+:is(#sad-app, #sad-start) .sad-item__warn {
 	position: absolute;
 	right: 6px;
 	top: 6px;
@@ -790,77 +795,77 @@
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.sad-item--over .sad-item__img {
+:is(#sad-app, #sad-start) .sad-item--over .sad-item__img {
 	box-shadow: inset 0 0 0 3px var(--sad-select);
 }
 
-.sad-item--adjusting {
+:is(#sad-app, #sad-start) .sad-item--adjusting {
 	cursor: grab;
 }
 
-.sad-item--swap {
+:is(#sad-app, #sad-start) .sad-item--swap {
 	cursor: pointer;
 }
 
-.sad-item--swap .sad-item__img {
+:is(#sad-app, #sad-start) .sad-item--swap .sad-item__img {
 	box-shadow: inset 0 0 0 2px var(--sad-select);
 }
 
-.sad-guides,
-.sad-overlay {
+:is(#sad-app, #sad-start) .sad-guides,
+:is(#sad-app, #sad-start) .sad-overlay {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
 }
 
-.sad-guides {
+:is(#sad-app, #sad-start) .sad-guides {
 	overflow: hidden;
 }
 
-.sad-guide-trim {
+:is(#sad-app, #sad-start) .sad-guide-trim {
 	position: absolute;
 	outline: 1px dashed #d12d2d;
 	box-shadow: 0 0 0 999px rgba(255, 255, 255, 0.45);
 }
 
-.sad-guide-safe {
+:is(#sad-app, #sad-start) .sad-guide-safe {
 	position: absolute;
 	outline: 1px dashed #2e9b4f;
 }
 
-.sad-guide-fold {
+:is(#sad-app, #sad-start) .sad-guide-fold {
 	position: absolute;
 	border-left: 1px solid rgba(0, 0, 0, 0.18);
 }
 
-.sad-snap {
+:is(#sad-app, #sad-start) .sad-snap {
 	position: absolute;
 	background: #e0249a;
 }
 
-.sad-snap--x {
+:is(#sad-app, #sad-start) .sad-snap--x {
 	top: 0;
 	bottom: 0;
 	width: 1px;
 }
 
-.sad-snap--y {
+:is(#sad-app, #sad-start) .sad-snap--y {
 	left: 0;
 	right: 0;
 	height: 1px;
 }
 
-.sad-frame {
+:is(#sad-app, #sad-start) .sad-frame {
 	position: absolute;
 	outline: 2px solid #2f7ae5;
 	transform-origin: 50% 50%;
 }
 
-.sad-frame--adjusting {
+:is(#sad-app, #sad-start) .sad-frame--adjusting {
 	outline: 2px dashed #2f7ae5;
 }
 
-.sad-handle {
+:is(#sad-app, #sad-start) .sad-handle {
 	position: absolute;
 	width: 12px;
 	height: 12px;
@@ -871,16 +876,16 @@
 	touch-action: none;
 }
 
-.sad-handle--nw { left: 0; top: 0; cursor: nwse-resize; }
-.sad-handle--n { left: 50%; top: 0; cursor: ns-resize; }
-.sad-handle--ne { left: 100%; top: 0; cursor: nesw-resize; }
-.sad-handle--e { left: 100%; top: 50%; cursor: ew-resize; }
-.sad-handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
-.sad-handle--s { left: 50%; top: 100%; cursor: ns-resize; }
-.sad-handle--sw { left: 0; top: 100%; cursor: nesw-resize; }
-.sad-handle--w { left: 0; top: 50%; cursor: ew-resize; }
+:is(#sad-app, #sad-start) .sad-handle--nw { left: 0; top: 0; cursor: nwse-resize; }
+:is(#sad-app, #sad-start) .sad-handle--n { left: 50%; top: 0; cursor: ns-resize; }
+:is(#sad-app, #sad-start) .sad-handle--ne { left: 100%; top: 0; cursor: nesw-resize; }
+:is(#sad-app, #sad-start) .sad-handle--e { left: 100%; top: 50%; cursor: ew-resize; }
+:is(#sad-app, #sad-start) .sad-handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
+:is(#sad-app, #sad-start) .sad-handle--s { left: 50%; top: 100%; cursor: ns-resize; }
+:is(#sad-app, #sad-start) .sad-handle--sw { left: 0; top: 100%; cursor: nesw-resize; }
+:is(#sad-app, #sad-start) .sad-handle--w { left: 0; top: 50%; cursor: ew-resize; }
 
-.sad-rotate {
+:is(#sad-app, #sad-start) .sad-rotate {
 	position: absolute;
 	left: 50%;
 	top: 100%;
@@ -898,7 +903,7 @@
 	touch-action: none;
 }
 
-.sad-dims {
+:is(#sad-app, #sad-start) .sad-dims {
 	position: absolute;
 	left: 50%;
 	top: 0;
@@ -911,7 +916,7 @@
 	white-space: nowrap;
 }
 
-.sad-float {
+:is(#sad-app, #sad-start) .sad-float {
 	position: absolute;
 	transform: translateX(-50%);
 	display: flex;
@@ -924,7 +929,7 @@
 	z-index: 2;
 }
 
-.sad-float__btn {
+:is(#sad-app, #sad-start) .sad-float__btn {
 	width: 32px;
 	height: 32px;
 	border: 0;
@@ -937,13 +942,13 @@
 	padding: 0;
 }
 
-.sad-float__btn:hover,
-.sad-float__btn[aria-pressed="true"] {
+:is(#sad-app, #sad-start) .sad-float__btn:hover,
+:is(#sad-app, #sad-start) .sad-float__btn[aria-pressed="true"] {
 	background: #e8f0fc;
 	color: #2f7ae5;
 }
 
-.sad-lowres {
+:is(#sad-app, #sad-start) .sad-lowres {
 	margin-top: 8px;
 	padding: 8px 12px;
 	background: #fdecea;
@@ -951,7 +956,7 @@
 	font-size: 0.85rem;
 }
 
-.sad-legend {
+:is(#sad-app, #sad-start) .sad-legend {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 16px;
@@ -960,7 +965,7 @@
 	color: var(--sad-muted);
 }
 
-.sad-legend span::before {
+:is(#sad-app, #sad-start) .sad-legend span::before {
 	content: "";
 	display: inline-block;
 	width: 18px;
@@ -969,26 +974,26 @@
 	border-top: 2px dashed;
 }
 
-.sad-legend__trim::before {
+:is(#sad-app, #sad-start) .sad-legend__trim::before {
 	color: #d12d2d;
 }
 
-.sad-legend__safe::before {
+:is(#sad-app, #sad-start) .sad-legend__safe::before {
 	color: #2e9b4f;
 }
 
-.sad-edit-tools {
+:is(#sad-app, #sad-start) .sad-edit-tools {
 	display: flex;
 	gap: 6px;
 	margin-right: auto;
 }
 
-.sad-seg {
+:is(#sad-app, #sad-start) .sad-seg {
 	display: inline-flex;
 	border: 1px solid var(--sad-line);
 }
 
-.sad-seg__btn {
+:is(#sad-app, #sad-start) .sad-seg__btn {
 	border: 0;
 	background: #fff;
 	padding: 7px 12px;
@@ -998,23 +1003,23 @@
 	color: var(--sad-ink);
 }
 
-.sad-seg__btn[aria-pressed="true"] {
+:is(#sad-app, #sad-start) .sad-seg__btn[aria-pressed="true"] {
 	background: var(--sad-accent);
 	color: #fff;
 }
 
-.sad-app .sad-num {
+#sad-app .sad-num {
 	width: 72px;
 	flex: none;
 	padding: 5px 6px;
 	font: inherit;
 }
 
-.sad-help--warn {
+:is(#sad-app, #sad-start) .sad-help--warn {
 	color: var(--sad-danger);
 }
 
-.sad-photo__where {
+:is(#sad-app, #sad-start) .sad-photo__where {
 	position: absolute;
 	left: 0;
 	right: 0;
@@ -1029,19 +1034,403 @@
 	pointer-events: none;
 }
 
-.sad-photo__where + .sad-photo__delete,
-.sad-photo__used {
+:is(#sad-app, #sad-start) .sad-photo__where + .sad-photo__delete,
+:is(#sad-app, #sad-start) .sad-photo__used {
 	z-index: 1;
 }
 
 @media (max-width: 600px) {
-	.sad-stage-wrap {
+	:is(#sad-app, #sad-start) .sad-stage-wrap {
 		padding: 20px 12px 48px;
 	}
 
-	.sad-handle {
+	:is(#sad-app, #sad-start) .sad-handle {
 		width: 18px;
 		height: 18px;
 		margin: -9px 0 0 -9px;
 	}
+}
+
+/* Undo theme styling on the editor's own controls */
+
+:is(#sad-app, #sad-start) button,
+:is(#sad-app, #sad-start) input[type="number"],
+:is(#sad-app, #sad-start) input[type="range"] {
+	border-radius: 0;
+	box-shadow: none;
+	text-transform: none;
+	letter-spacing: normal;
+	font-family: inherit;
+	font-weight: normal;
+	min-height: 0;
+	min-width: 0;
+	margin: 0;
+	text-decoration: none;
+	transition: none;
+}
+
+:is(#sad-app, #sad-start) button:hover,
+:is(#sad-app, #sad-start) button:focus {
+	box-shadow: none;
+	text-decoration: none;
+}
+
+:is(#sad-app, #sad-start) .sad-btn {
+	border-radius: 2px;
+	font-weight: 500;
+}
+
+:is(#sad-app, #sad-start) .sad-btn:hover {
+	background: #fff;
+	color: var(--sad-accent);
+	border-color: var(--sad-accent);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary,
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: var(--sad-accent);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--ghost {
+	border-color: var(--sad-line);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--ghost:hover {
+	border-color: var(--sad-muted);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--danger,
+:is(#sad-app, #sad-start) .sad-btn--danger:hover {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-thumb,
+:is(#sad-app, #sad-start) .sad-thumb:hover,
+:is(#sad-app, #sad-start) .sad-layout,
+:is(#sad-app, #sad-start) .sad-layout:hover,
+:is(#sad-app, #sad-start) .sad-template,
+:is(#sad-app, #sad-start) .sad-template:hover {
+	color: var(--sad-ink);
+	border-radius: 0;
+}
+
+:is(#sad-app, #sad-start) .sad-thumb:hover,
+:is(#sad-app, #sad-start) .sad-thumb {
+	background: none;
+}
+
+:is(#sad-app, #sad-start) .sad-layout:hover,
+:is(#sad-app, #sad-start) .sad-template:hover {
+	background: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-float__btn {
+	border-radius: 4px;
+	padding: 0;
+}
+
+/* Side panel tabs */
+
+#sad-app .sad-tabs {
+	display: flex;
+	border-bottom: 1px solid var(--sad-line);
+	flex: none;
+}
+
+#sad-app .sad-tab {
+	flex: 1;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: none;
+	padding: 10px 6px;
+	font-size: 0.9rem;
+	color: var(--sad-muted);
+	cursor: pointer;
+}
+
+#sad-app .sad-tab:hover {
+	background: var(--sad-bg);
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-tab[aria-selected="true"] {
+	color: var(--sad-ink);
+	border-bottom-color: var(--sad-accent);
+	font-weight: 600;
+}
+
+#sad-app .sad-side > .sad-section {
+	margin: 0;
+	padding: 12px;
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+}
+
+#sad-app .sad-side > .sad-section > h3 {
+	display: none;
+}
+
+#sad-app .sad-side .sad-layouts {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+}
+
+#sad-app .sad-side .sad-templates {
+	grid-template-columns: 1fr;
+}
+
+#sad-app .sad-side .sad-auto {
+	background: none;
+}
+
+#sad-app .sad-tools {
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 12px;
+}
+
+#sad-app .sad-tools .sad-lowres {
+	margin: 0 0 10px;
+}
+
+#sad-app .sad-tools .sad-legend {
+	margin-top: 12px;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#sad-app .sad-tools__title {
+	width: 100%;
+	margin: 0;
+	font-size: 1rem;
+}
+
+#sad-app .sad-home {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border: 1px solid var(--sad-line);
+	color: var(--sad-ink);
+	text-decoration: none;
+	font-size: 1.1rem;
+	flex: none;
+}
+
+#sad-app .sad-header__name {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+#sad-app .sad-strip-section {
+	margin-top: 8px;
+}
+
+/* Computers: the editor fills the window, nothing scrolls except the panels */
+
+html.sad-locked,
+html.sad-locked body {
+	overflow: hidden !important;
+}
+
+#sad-app.sad-app--full {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	width: auto;
+	max-width: none;
+	margin: 0;
+	padding: 0;
+	background: var(--sad-bg);
+	display: flex;
+	flex-direction: column;
+}
+
+#sad-app.sad-app--full .sad-header {
+	flex: none;
+	margin: 0;
+	padding: 8px 16px;
+	background: #fff;
+	border-bottom: 1px solid var(--sad-line);
+	flex-wrap: nowrap;
+}
+
+#sad-app.sad-app--full .sad-title {
+	font-size: 1.1rem;
+	margin: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#sad-app.sad-app--full .sad-edit-tools {
+	margin: 0 auto;
+}
+
+#sad-app.sad-app--full .sad-banner {
+	flex: none;
+	margin: 0;
+}
+
+#sad-app.sad-app--full .sad-workspace {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 300px minmax(0, 1fr) 250px;
+	gap: 0;
+	align-items: stretch;
+}
+
+#sad-app.sad-app--full .sad-side {
+	position: static;
+	max-height: none;
+	min-height: 0;
+	height: 100%;
+	border-width: 0 1px 0 0;
+}
+
+#sad-app.sad-app--full .sad-side .sad-tray-section {
+	padding: 12px;
+}
+
+#sad-app.sad-app--full .sad-main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	padding: 8px 16px 0;
+}
+
+#sad-app.sad-app--full .sad-nav {
+	flex: none;
+	margin-bottom: 0;
+}
+
+#sad-app.sad-app--full .sad-stage-wrap {
+	flex: 1 1 0;
+	min-height: 0;
+	align-items: center;
+	background: none;
+	padding: 34px 40px 52px;
+	overflow: hidden;
+}
+
+#sad-app.sad-app--full .sad-strip-section {
+	flex: none;
+	margin: 0 -16px;
+	padding: 8px 16px 4px;
+	background: #fff;
+	border-top: 1px solid var(--sad-line);
+}
+
+#sad-app.sad-app--full .sad-tools {
+	border-width: 0 0 0 1px;
+	overflow-y: auto;
+	min-height: 0;
+}
+
+#sad-app.sad-app--full .sad-slot-tools {
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	gap: 10px;
+}
+
+#sad-app.sad-app--full .sad-slot-tools .sad-seg {
+	display: flex;
+}
+
+#sad-app.sad-app--full .sad-slot-tools .sad-seg__btn {
+	flex: 1;
+	padding: 7px 4px;
+}
+
+#sad-app.sad-app--full .sad-zoom input[type="range"] {
+	flex: 1;
+	width: auto;
+}
+
+#sad-app.sad-app--full .sad-toasts {
+	position: fixed;
+}
+
+/* Phones: one scrolling column, photo panel pinned to the bottom */
+
+@media (max-width: 899px), (max-height: 559px) {
+	#sad-app .sad-side > .sad-section {
+		max-height: 38vh;
+	}
+
+	#sad-app .sad-tools {
+		margin-top: 8px;
+	}
+
+	#sad-app .sad-main {
+		display: flex;
+		flex-direction: column;
+	}
+
+	#sad-app .sad-workspace {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	#sad-app .sad-main {
+		order: 1;
+	}
+
+	#sad-app .sad-tools {
+		order: 2;
+	}
+
+	#sad-app .sad-side {
+		order: 3;
+	}
+}
+
+#sad-app .sad-main,
+#sad-app .sad-strip-section,
+#sad-app .sad-tools {
+	min-width: 0;
+}
+
+#sad-app .sad-tools {
+	overflow-x: hidden;
+}
+
+#sad-app .sad-tools .sad-zoom {
+	width: 100%;
+}
+
+#sad-app .sad-tools .sad-zoom input[type="range"] {
+	flex: 1;
+	width: auto;
+	min-width: 0;
+}
+
+#sad-app .sad-num {
+	background: #fff;
+	color: var(--sad-ink);
+	border: 1px solid var(--sad-line);
+	border-radius: 0;
+	padding: 5px 6px;
+	height: auto;
+	font-weight: normal;
+	text-transform: none;
+}
+
+#sad-app input[type="range"] {
+	background: transparent;
+	border: 0;
+	padding: 0;
+}
+
+#sad-app .sad-side .sad-layout {
+	width: 100%;
 }

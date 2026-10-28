@@ -99,6 +99,7 @@ function sad_render_shortcode() {
 				'layouts'   => $layouts,
 				'templates' => $templates,
 				'chunkSize' => $chunk,
+				'home'      => home_url( '/' ),
 				'welcome'   => ! empty( $_GET['sad_welcome'] ), // phpcs:ignore WordPress.Security.NonceVerification
 			)
 		) . ';',

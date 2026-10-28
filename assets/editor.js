@@ -40,6 +40,7 @@
 		selecting: false,
 		selected: {},
 		template: config.templates && config.templates.length ? config.templates[0].id : null,
+		tab: 'photos',
 		history: [],
 		future: [],
 		checkpointKey: null,
@@ -1200,8 +1201,11 @@
 		var g = geo();
 		var wrapStyle = window.getComputedStyle( dom.stageWrap );
 		var inner = dom.stageWrap.clientWidth - parseFloat( wrapStyle.paddingLeft ) - parseFloat( wrapStyle.paddingRight );
-		var width = Math.min( inner, 1200 );
-		if ( window.innerHeight > 300 ) {
+		var width = Math.min( inner, 1600 );
+		if ( isFullScreen() ) {
+			var innerH = dom.stageWrap.clientHeight - parseFloat( wrapStyle.paddingTop ) - parseFloat( wrapStyle.paddingBottom );
+			width = Math.min( width, innerH * g.cw / g.ch );
+		} else if ( window.innerHeight > 300 ) {
 			width = Math.min( width, ( window.innerHeight - 220 - ( state.headerOffset || 0 ) ) * g.cw / g.ch );
 		}
 		width = Math.max( width, 240 );
@@ -1429,6 +1433,7 @@
 		}
 		var index = state.selectedItem;
 		var photo = item.photo && state.photos[ item.photo ];
+		dom.slotTools.appendChild( el( 'h3', { class: 'sad-tools__title', text: photo ? 'Photo' : 'Empty photo box' } ) );
 		if ( photo ) {
 			dom.slotTools.appendChild( segmented( [ [ 'fill', 'Fill box' ], [ 'fit', 'Show whole photo' ] ], item.fit, function ( fit ) {
 				setFit( item, fit );
@@ -1511,7 +1516,6 @@
 	function renderLayouts() {
 		dom.layouts.innerHTML = '';
 		if ( isLocked() ) {
-			dom.layoutsSection.hidden = true;
 			return;
 		}
 		var spread = currentSpread();
@@ -1556,9 +1560,13 @@
 		if ( ! isLocked() ) {
 			dom.strip.appendChild( el( 'button', { type: 'button', class: 'sad-thumb sad-thumb--add', text: '+ Add spread', onclick: addSpread } ) );
 		}
+		// Scroll the strip itself, never the page, to show the current spread.
 		var active = dom.strip.querySelector( '.sad-thumb--active' );
-		if ( active && active.scrollIntoView ) {
-			active.scrollIntoView( { block: 'nearest', inline: 'nearest' } );
+		if ( active ) {
+			var left = active.offsetLeft - dom.strip.offsetLeft;
+			if ( left < dom.strip.scrollLeft || left + active.offsetWidth > dom.strip.scrollLeft + dom.strip.clientWidth ) {
+				dom.strip.scrollLeft = left - ( dom.strip.clientWidth - active.offsetWidth ) / 2;
+			}
 		}
 	}
 
@@ -1654,8 +1662,7 @@
 
 	function renderAutoFill() {
 		renderTrayTools();
-		dom.autoSection.hidden = isLocked() || ! config.templates || ! config.templates.length;
-		if ( dom.autoSection.hidden ) {
+		if ( isLocked() || ! config.templates || ! config.templates.length ) {
 			return;
 		}
 		dom.templates.innerHTML = '';
@@ -1720,9 +1727,35 @@
 		renderTray();
 		renderAutoFill();
 		renderUndo();
+		// Layouts and auto-fill are only for editing.
+		var editable = ! isLocked();
+		dom.tabs.layouts.button.hidden = ! editable;
+		dom.tabs.auto.button.hidden = ! editable || ! config.templates || ! config.templates.length;
+		setTab( dom.tabs[ state.tab ].button.hidden ? 'photos' : state.tab );
 	}
 
 	/* ---------- setup ---------- */
+
+	var fullQuery = window.matchMedia ? window.matchMedia( '(min-width: 900px) and (min-height: 560px)' ) : null;
+
+	/** On computers the editor fills the window like a desktop app; on phones it scrolls. */
+	function isFullScreen() {
+		return !! ( fullQuery && fullQuery.matches );
+	}
+
+	function applyScreenMode() {
+		var full = isFullScreen();
+		root.classList.toggle( 'sad-app--full', full );
+		document.documentElement.classList.toggle( 'sad-locked', full );
+	}
+
+	function setTab( tab ) {
+		state.tab = tab;
+		Object.keys( dom.tabs ).forEach( function ( key ) {
+			dom.tabs[ key ].button.setAttribute( 'aria-selected', key === tab ? 'true' : 'false' );
+			dom.tabs[ key ].panel.hidden = key !== tab;
+		} );
+	}
 
 	/** Where a pointer or drop lands on the stage, in mm from the top left of the trimmed spread. */
 	function stagePoint( event ) {
@@ -1920,33 +1953,55 @@
 			el( 'div', { class: 'sad-row' }, [ dom.autoButton, dom.autoInfo ] ),
 		] );
 
+		dom.tabs = {
+			photos: { label: 'Photos', panel: traySection },
+			layouts: { label: 'Layouts', panel: dom.layoutsSection },
+			auto: { label: 'Auto-fill', panel: dom.autoSection },
+		};
+		var tabBar = el( 'div', { class: 'sad-tabs', role: 'tablist' } );
+		Object.keys( dom.tabs ).forEach( function ( key ) {
+			dom.tabs[ key ].button = el( 'button', { type: 'button', role: 'tab', class: 'sad-tab', text: dom.tabs[ key ].label, onclick: function () {
+				setTab( key );
+			} } );
+			tabBar.appendChild( dom.tabs[ key ].button );
+		} );
+
 		root.appendChild( el( 'div', { class: 'sad-header' }, [
-			el( 'div', {}, [ dom.title, dom.size ] ),
+			el( 'div', { class: 'sad-header__name' }, [
+				config.home ? el( 'a', { class: 'sad-home', href: config.home, title: 'Back to the website', text: '←' } ) : null,
+				el( 'div', {}, [ dom.title, dom.size ] ),
+			] ),
+			dom.editTools,
 			el( 'div', { class: 'sad-header__actions' }, [ dom.status, dom.approve ] ),
 		] ) );
 		root.appendChild( dom.banner );
-		// The photo tray sits beside the spread (pinned to the bottom on narrow screens) and stays in
-		// view while scrolling, so photos can always be dragged straight onto the spread.
+		// Computers: photos and layouts on the left, the spread in the middle, box settings on the
+		// right and all spreads along the bottom, all in view at once. Phones: one scrolling column
+		// with the photo panel pinned to the bottom of the screen.
 		root.appendChild( el( 'div', { class: 'sad-workspace' }, [
-			el( 'aside', { class: 'sad-side' }, [ traySection ] ),
+			el( 'aside', { class: 'sad-side' }, [ tabBar, traySection, dom.layoutsSection, dom.autoSection ] ),
 			el( 'div', { class: 'sad-main' }, [
-				el( 'div', { class: 'sad-nav' }, [ dom.editTools, dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
+				el( 'div', { class: 'sad-nav' }, [ dom.prev, dom.spreadLabel, dom.next, dom.spreadTools ] ),
 				dom.stageWrap,
-				dom.lowres,
-				dom.legend,
-				dom.slotTools,
-				el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'All spreads' } ), dom.strip ] ),
-				dom.layoutsSection,
-				dom.autoSection,
+				el( 'section', { class: 'sad-section sad-strip-section' }, [ dom.strip ] ),
 			] ),
+			el( 'aside', { class: 'sad-tools' }, [ dom.lowres, dom.slotTools, dom.legend ] ),
 		] ) );
+		setTab( 'photos' );
 		dom.dropOverlay = el( 'div', { class: 'sad-drop-overlay', hidden: true }, [ el( 'span', { text: 'Drop your photos to add them' } ) ] );
 		root.appendChild( dom.dropOverlay );
 		root.appendChild( dom.toasts );
 		enableCanvas();
 		enableKeys();
 		enableFileDrop();
+		applyScreenMode();
 		measureStickyHeader();
+		if ( fullQuery && fullQuery.addEventListener ) {
+			fullQuery.addEventListener( 'change', function () {
+				applyScreenMode();
+				renderStage();
+			} );
+		}
 
 		var resizeTimer;
 		window.addEventListener( 'resize', function () {
