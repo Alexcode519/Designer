@@ -30,6 +30,9 @@
 		current: 0,
 		selectedSlot: null,
 		armedPhoto: null,
+		selecting: false,
+		selected: {},
+		template: config.templates && config.templates.length ? config.templates[0].id : null,
 		saveTimer: null,
 		saving: false,
 		dirty: false,
@@ -215,6 +218,138 @@
 		state.armedPhoto = null;
 		scheduleSave();
 		renderAll();
+	}
+
+	/** Swaps two spaces on the current spread, keeping each photo's own zoom and position. */
+	function swapSlots( from, to ) {
+		var slots = state.design.spreads[ state.current ].slots;
+		if ( from === to || ! slots[ from ] || ! slots[ to ] ) {
+			return;
+		}
+		var moving = slots[ from ];
+		slots[ from ] = { photo: slots[ to ].photo, zoom: 1, x: 0.5, y: 0.5 };
+		slots[ to ] = { photo: moving.photo, zoom: 1, x: 0.5, y: 0.5 };
+		state.selectedSlot = to;
+		scheduleSave();
+		renderAll();
+	}
+
+	/* ---------- auto-fill ---------- */
+
+	function layoutCapacity( id ) {
+		return layouts[ id ] ? layouts[ id ].slots.length : 0;
+	}
+
+	function chosenPhotos() {
+		var picked = state.photoOrder.filter( function ( id ) {
+			return state.selected[ id ];
+		} );
+		return picked.length ? picked : state.photoOrder.slice();
+	}
+
+	/**
+	 * Lays the photos out across the album in order, using the template's layouts.
+	 * Picks how many spreads to use from the template's average photos per spread, within the
+	 * album's minimum and maximum, then gives each spread the template layout that best fits the
+	 * photos still to place.
+	 */
+	function buildAutoFill( template, photoIds ) {
+		var maxCap = 0;
+		Object.keys( layouts ).forEach( function ( id ) {
+			maxCap = Math.max( maxCap, layoutCapacity( id ) );
+		} );
+		var pattern = template.layouts.filter( function ( id ) {
+			return layouts[ id ];
+		} );
+		var average = pattern.reduce( function ( sum, id ) {
+			return sum + layoutCapacity( id );
+		}, 0 ) / pattern.length;
+
+		var total = photoIds.length;
+		var spreads = Math.round( total / average ) || 1;
+		spreads = Math.max( spreads, Math.ceil( total / maxCap ) );
+		spreads = Math.min( state.album.maxSpreads, Math.max( state.album.minSpreads, spreads ) );
+		var usable = Math.min( total, spreads * maxCap );
+
+		var result = [];
+		var next = 0;
+		for ( var i = 0; i < spreads; i++ ) {
+			var remaining = usable - next;
+			var spreadsLeft = spreads - i;
+			var low = Math.max( remaining >= spreadsLeft ? 1 : 0, remaining - ( spreadsLeft - 1 ) * maxCap );
+			var high = remaining >= spreadsLeft ? Math.min( maxCap, remaining - ( spreadsLeft - 1 ) ) : Math.min( 1, remaining );
+			var target = remaining / spreadsLeft;
+
+			// Prefer the template's own rhythm, starting where this spread falls in the pattern.
+			var layout = null;
+			var bestGap = Infinity;
+			for ( var k = 0; k < pattern.length; k++ ) {
+				var candidate = pattern[ ( i + k ) % pattern.length ];
+				var cap = layoutCapacity( candidate );
+				if ( cap < low || cap > high ) {
+					continue;
+				}
+				var gap = Math.abs( cap - target );
+				if ( gap < bestGap - 0.5 ) {
+					bestGap = gap;
+					layout = candidate;
+				}
+			}
+			if ( ! layout ) {
+				var wanted = Math.min( high, Math.max( low, Math.round( target ) ) );
+				layout = Object.keys( layouts ).filter( function ( id ) {
+					return layoutCapacity( id ) === wanted;
+				} )[ 0 ] || pattern[ 0 ];
+			}
+
+			var count = layoutCapacity( layout );
+			var ids = photoIds.slice( next, next + Math.min( count, remaining ) );
+			// One upright photo across a whole spread crops badly; give it one page instead.
+			if ( ids.length === 1 && layout === 'full' && state.photos[ ids[ 0 ] ].height > state.photos[ ids[ 0 ] ].width && layouts[ 'right-only' ] ) {
+				layout = 'right-only';
+				count = 1;
+			}
+			next += ids.length;
+
+			var slots = [];
+			for ( var s = 0; s < layoutCapacity( layout ); s++ ) {
+				slots.push( ids[ s ] ? { photo: ids[ s ], zoom: 1, x: 0.5, y: 0.5 } : emptySlot() );
+			}
+			result.push( { layout: layout, slots: slots } );
+		}
+		return { spreads: result, placed: next, skipped: total - next };
+	}
+
+	function autoFill() {
+		var template = config.templates.filter( function ( t ) {
+			return t.id === state.template;
+		} )[ 0 ];
+		var photoIds = chosenPhotos();
+		if ( ! template || ! photoIds.length ) {
+			toast( 'Add some photos first.' );
+			return;
+		}
+		var hasWork = state.design.spreads.some( function ( spread ) {
+			return spread.slots.some( function ( slot ) {
+				return slot.photo;
+			} );
+		} );
+		if ( hasWork && ! window.confirm( 'Auto-fill replaces the spreads you have now with a new layout. Continue?' ) ) {
+			return;
+		}
+		var filled = buildAutoFill( template, photoIds );
+		state.design.spreads = filled.spreads;
+		state.current = 0;
+		state.selectedSlot = null;
+		state.armedPhoto = null;
+		state.selecting = false;
+		scheduleSave();
+		renderAll();
+		var message = 'Placed ' + filled.placed + ' photos on ' + filled.spreads.length + ' spreads. Swap or move anything you like.';
+		if ( filled.skipped > 0 ) {
+			message = 'Placed ' + filled.placed + ' photos. ' + filled.skipped + ' did not fit in the ' + state.album.maxSpreads + ' spreads allowed.';
+		}
+		toast( message, filled.skipped > 0 ? 'error' : 'success' );
 	}
 
 	function addSpread() {
@@ -506,6 +641,12 @@
 		} );
 		node.addEventListener( 'drop', function ( event ) {
 			event.preventDefault();
+			node.classList.remove( 'sad-slot--over' );
+			var from = event.dataTransfer.getData( 'text/x-sad-slot' );
+			if ( from !== '' && ! isNaN( parseInt( from, 10 ) ) ) {
+				swapSlots( parseInt( from, 10 ), index );
+				return;
+			}
 			var id = event.dataTransfer.getData( 'text/x-sad-photo' );
 			if ( id && state.photos[ id ] ) {
 				placePhoto( index, id );
@@ -514,6 +655,15 @@
 
 		if ( photo ) {
 			enablePan( node, spread, index );
+			// A placed photo that isn't selected can be dragged onto another space to swap them.
+			// The selected one is panned instead.
+			if ( state.selectedSlot !== index ) {
+				node.setAttribute( 'draggable', 'true' );
+				node.addEventListener( 'dragstart', function ( event ) {
+					event.dataTransfer.setData( 'text/x-sad-slot', String( index ) );
+					event.dataTransfer.effectAllowed = 'move';
+				} );
+			}
 		}
 	}
 
@@ -691,13 +841,18 @@
 			var photo = state.photos[ id ];
 			var img = el( 'img', { src: photo.preview, alt: photo.name, loading: 'lazy', draggable: 'false' } );
 			var item = el( 'div', {
-				class: 'sad-photo' + ( state.armedPhoto === id ? ' sad-photo--armed' : '' ) + ( counts[ id ] ? ' sad-photo--used' : '' ),
-				draggable: isLocked() ? 'false' : 'true',
+				class: 'sad-photo' + ( state.armedPhoto === id ? ' sad-photo--armed' : '' ) + ( counts[ id ] ? ' sad-photo--used' : '' ) + ( state.selected[ id ] ? ' sad-photo--selected' : '' ),
+				draggable: isLocked() || state.selecting ? 'false' : 'true',
+				'aria-pressed': state.selecting ? ( state.selected[ id ] ? 'true' : 'false' ) : null,
 				tabindex: '0',
 				role: 'button',
 				'aria-label': photo.name + ( counts[ id ] ? ', used in album' : '' ),
 				title: photo.name,
-			}, [ img, counts[ id ] ? el( 'span', { class: 'sad-photo__used', text: '✓' } ) : null ] );
+			}, [
+				img,
+				counts[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__used', text: '✓' } ) : null,
+				state.selecting ? el( 'span', { class: 'sad-photo__check', 'aria-hidden': 'true', text: state.selected[ id ] ? '✓' : '' } ) : null,
+			] );
 
 			if ( ! isLocked() ) {
 				item.addEventListener( 'dragstart', function ( event ) {
@@ -705,6 +860,16 @@
 					event.dataTransfer.effectAllowed = 'copy';
 				} );
 				item.addEventListener( 'click', function () {
+					if ( state.selecting ) {
+						if ( state.selected[ id ] ) {
+							delete state.selected[ id ];
+						} else {
+							state.selected[ id ] = true;
+						}
+						renderTray();
+						renderAutoFill();
+						return;
+					}
 					var spread = state.design.spreads[ state.current ];
 					if ( state.selectedSlot !== null && spread.slots[ state.selectedSlot ] && ! spread.slots[ state.selectedSlot ].photo ) {
 						placePhoto( state.selectedSlot, id );
@@ -719,19 +884,79 @@
 						item.click();
 					}
 				} );
-				item.appendChild( el( 'button', {
-					type: 'button',
-					class: 'sad-photo__delete',
-					'aria-label': 'Delete ' + photo.name,
-					text: '×',
-					onclick: function ( event ) {
-						event.stopPropagation();
-						deletePhoto( id );
-					},
-				} ) );
+				if ( ! state.selecting ) {
+					item.appendChild( el( 'button', {
+						type: 'button',
+						class: 'sad-photo__delete',
+						'aria-label': 'Delete ' + photo.name,
+						text: '×',
+						onclick: function ( event ) {
+							event.stopPropagation();
+							deletePhoto( id );
+						},
+					} ) );
+				}
 			}
 			dom.tray.appendChild( item );
 		} );
+	}
+
+	function renderTrayTools() {
+		var count = Object.keys( state.selected ).filter( function ( id ) {
+			return state.photos[ id ];
+		} ).length;
+		dom.selectToggle.hidden = isLocked() || ! state.photoOrder.length;
+		dom.selectToggle.textContent = state.selecting ? 'Done selecting' : 'Select photos';
+		dom.selectAll.hidden = ! state.selecting;
+		dom.selectNone.hidden = ! state.selecting || ! count;
+		dom.selectHelp.hidden = ! state.selecting;
+		dom.selectHelp.textContent = count ? count + ' selected' : 'Tap photos to choose the ones for your album.';
+	}
+
+	function renderAutoFill() {
+		renderTrayTools();
+		dom.autoSection.hidden = isLocked() || ! config.templates || ! config.templates.length;
+		if ( dom.autoSection.hidden ) {
+			return;
+		}
+		dom.templates.innerHTML = '';
+		config.templates.forEach( function ( template ) {
+			var icons = el( 'span', { class: 'sad-template__icons', 'aria-hidden': 'true' } );
+			template.layouts.slice( 0, 3 ).forEach( function ( id ) {
+				if ( ! layouts[ id ] ) {
+					return;
+				}
+				var icon = el( 'span', { class: 'sad-layout__icon' } );
+				icon.style.aspectRatio = String( spreadAspect() );
+				layouts[ id ].slots.forEach( function ( rect ) {
+					var box = el( 'span', { class: 'sad-layout__box' } );
+					box.style.left = rect[ 0 ] * 100 + '%';
+					box.style.top = rect[ 1 ] * 100 + '%';
+					box.style.width = rect[ 2 ] * 100 + '%';
+					box.style.height = rect[ 3 ] * 100 + '%';
+					icon.appendChild( box );
+				} );
+				icons.appendChild( icon );
+			} );
+			dom.templates.appendChild( el( 'button', {
+				type: 'button',
+				class: 'sad-template' + ( state.template === template.id ? ' sad-template--active' : '' ),
+				'aria-pressed': state.template === template.id ? 'true' : 'false',
+				onclick: function () {
+					state.template = template.id;
+					renderAutoFill();
+				},
+			}, [ icons, el( 'strong', { text: template.name } ), el( 'span', { class: 'sad-help', text: template.description } ) ] ) );
+		} );
+		var picked = Object.keys( state.selected ).filter( function ( id ) {
+			return state.photos[ id ];
+		} ).length;
+		dom.autoInfo.textContent = ! state.photoOrder.length
+			? 'Add photos first.'
+			: picked
+				? 'Uses your ' + picked + ' selected photos, in order.'
+				: 'Uses all ' + state.photoOrder.length + ' photos, in order. To use fewer, tap "Select photos" below.';
+		dom.autoButton.disabled = ! state.photoOrder.length;
 	}
 
 	function renderUploadStatus() {
@@ -764,6 +989,7 @@
 		renderLayouts();
 		renderStrip();
 		renderTray();
+		renderAutoFill();
 	}
 
 	/* ---------- setup ---------- */
@@ -810,9 +1036,38 @@
 		dom.uploadStatus = el( 'span', { class: 'sad-help', 'aria-live': 'polite' } );
 		dom.trayCount = el( 'span', { class: 'sad-count' } );
 		dom.tray = el( 'div', { class: 'sad-tray' } );
+		dom.selectToggle = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', onclick: function () {
+			state.selecting = ! state.selecting;
+			state.armedPhoto = null;
+			renderTray();
+			renderAutoFill();
+		} } );
+		dom.selectAll = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Select all', onclick: function () {
+			state.photoOrder.forEach( function ( id ) {
+				state.selected[ id ] = true;
+			} );
+			renderTray();
+			renderAutoFill();
+		} } );
+		dom.selectNone = el( 'button', { type: 'button', class: 'sad-btn sad-btn--ghost', text: 'Clear', onclick: function () {
+			state.selected = {};
+			renderTray();
+			renderAutoFill();
+		} } );
+		dom.selectHelp = el( 'span', { class: 'sad-help' } );
 		var traySection = el( 'section', { class: 'sad-section sad-tray-section' }, [
-			el( 'div', { class: 'sad-row' }, [ el( 'h3', {}, [ 'Your photos ', dom.trayCount ] ), dom.upload, dom.uploadStatus ] ),
+			el( 'div', { class: 'sad-row' }, [ el( 'h3', {}, [ 'Your photos ', dom.trayCount ] ), dom.upload, dom.selectToggle, dom.selectAll, dom.selectNone, dom.selectHelp, dom.uploadStatus ] ),
 			dom.tray,
+		] );
+
+		dom.templates = el( 'div', { class: 'sad-templates' } );
+		dom.autoInfo = el( 'p', { class: 'sad-help' } );
+		dom.autoButton = el( 'button', { type: 'button', class: 'sad-btn sad-btn--primary', text: 'Auto-fill my album', onclick: autoFill } );
+		dom.autoSection = el( 'section', { class: 'sad-section sad-auto' }, [
+			el( 'h3', { text: 'Auto-fill' } ),
+			el( 'p', { class: 'sad-help', text: 'Pick a style and we will lay your photos out across the album for you. You can change anything afterwards.' } ),
+			dom.templates,
+			el( 'div', { class: 'sad-row' }, [ dom.autoButton, dom.autoInfo ] ),
 		] );
 		traySection.addEventListener( 'dragover', function ( event ) {
 			if ( ! isLocked() && event.dataTransfer && Array.prototype.indexOf.call( event.dataTransfer.types, 'Files' ) !== -1 ) {
@@ -841,6 +1096,7 @@
 		root.appendChild( dom.slotTools );
 		root.appendChild( el( 'section', { class: 'sad-section' }, [ el( 'h3', { text: 'All spreads' } ), dom.strip ] ) );
 		root.appendChild( dom.layoutsSection );
+		root.appendChild( dom.autoSection );
 		root.appendChild( traySection );
 		root.appendChild( dom.toasts );
 

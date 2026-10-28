@@ -73,3 +73,35 @@ function sad_layout_slots( $layout_id ) {
 	$layouts = sad_layouts();
 	return isset( $layouts[ $layout_id ] ) ? $layouts[ $layout_id ]['slots'] : $layouts['two-full']['slots'];
 }
+
+/**
+ * Auto-fill templates. Each lists the layouts it prefers, in the order they repeat through the album.
+ * Auto-fill picks from this list the layout whose number of spaces matches the photos for each spread,
+ * falling back to any layout with that many spaces.
+ */
+function sad_templates() {
+	$templates = array(
+		'classic' => array(
+			'name'        => 'Classic',
+			'description' => 'Framed photos with white borders, calm and timeless.',
+			'layouts'     => array( 'two-framed', 'left-full-right-framed', 'right-only', 'two-and-two', 'left-framed-right-full', 'left-full-right-two' ),
+		),
+		'bold'    => array(
+			'name'        => 'Bold',
+			'description' => 'Big edge-to-edge photos, fewer per page.',
+			'layouts'     => array( 'full', 'two-full', 'left-full-right-two', 'two-full', 'left-two-right-full', 'full' ),
+		),
+		'story'   => array(
+			'name'        => 'Story',
+			'description' => 'More photos per spread to tell the whole day.',
+			'layouts'     => array( 'left-full-right-four', 'two-and-two', 'left-full-right-two', 'left-two-right-full', 'two-and-two', 'two-full' ),
+		),
+	);
+
+	/**
+	 * Filters the auto-fill templates.
+	 *
+	 * @param array $templates Template id => array( 'name', 'description', 'layouts' => layout ids ).
+	 */
+	return apply_filters( 'sad_templates', $templates );
+}

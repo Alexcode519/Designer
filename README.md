@@ -11,7 +11,8 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Opens a private link you send them. No account or app needed.
 - Uploads photos (JPEG or PNG). Large photos are sent in small pieces, so the hosting upload limit doesn't matter.
 - Picks a layout for each spread from 10 options, then drags photos into the spaces (on a phone: tap a photo, then tap a space).
-- Taps a placed photo to zoom it and drag it into position.
+- Taps a placed photo to zoom it and drag it into position, or drags one placed photo onto another to swap them.
+- Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
 - Adds, deletes and reorders spreads, within the minimum and maximum you set.
 - Sees a "Low quality" warning when a photo is enlarged too much to print sharply.
 - Everything saves automatically. Clicking **Approve for printing** locks the album.
@@ -65,4 +66,4 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 
 - PHP 7.4+, WordPress 6.2+, with the GD image library (standard on most hosts). No build step.
 - `includes/render.php` and `assets/editor.js` share the crop logic. If you change one, change the other.
-- Filters: `sad_layouts` adds or changes spread layouts. `sad_chunk_size` changes the upload piece size.
+- Filters: `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.

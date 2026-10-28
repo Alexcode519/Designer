@@ -481,3 +481,72 @@
 .sad-app [hidden] {
 	display: none !important;
 }
+
+.sad-slot[draggable="true"] {
+	cursor: grab;
+}
+
+.sad-photo--selected {
+	border-color: var(--sad-select);
+}
+
+.sad-photo__check {
+	position: absolute;
+	top: 6px;
+	left: 6px;
+	width: 22px;
+	height: 22px;
+	line-height: 20px;
+	text-align: center;
+	font-size: 0.8rem;
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.35);
+	color: #fff;
+}
+
+.sad-photo--selected .sad-photo__check {
+	background: var(--sad-select);
+}
+
+.sad-auto {
+	background: var(--sad-bg);
+	padding: 16px;
+}
+
+.sad-auto > .sad-help {
+	margin-bottom: 10px;
+}
+
+.sad-templates {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.sad-template {
+	appearance: none;
+	text-align: left;
+	background: #fff;
+	border: 1px solid var(--sad-line);
+	padding: 10px;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.sad-template--active {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+.sad-template__icons {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 4px;
+	margin-bottom: 4px;
+}

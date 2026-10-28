@@ -31,6 +31,11 @@ function sad_render_shortcode() {
 		$layouts[] = array( 'id' => $id, 'name' => $layout['name'], 'slots' => $layout['slots'] );
 	}
 
+	$templates = array();
+	foreach ( sad_templates() as $id => $template ) {
+		$templates[] = array( 'id' => $id, 'name' => $template['name'], 'description' => $template['description'], 'layouts' => $template['layouts'] );
+	}
+
 	// Leave headroom under the server's upload limit for the other form fields.
 	$chunk = (int) apply_filters( 'sad_chunk_size', min( 2 * MB_IN_BYTES, max( 256 * KB_IN_BYTES, wp_max_upload_size() - 64 * KB_IN_BYTES ) ) );
 
@@ -40,6 +45,7 @@ function sad_render_shortcode() {
 			array(
 				'api'       => esc_url_raw( rest_url( SAD_REST_NS . '/album/' . $token ) ),
 				'layouts'   => $layouts,
+				'templates' => $templates,
 				'chunkSize' => $chunk,
 			)
 		) . ';',
