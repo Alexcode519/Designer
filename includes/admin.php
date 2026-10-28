@@ -85,12 +85,13 @@ function sad_render_status_box( $post ) {
 		<p>Approved <?php echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) get_post_meta( $post->ID, '_sad_approved_at', true ) ) ); ?></p>
 	<?php endif; ?>
 	<p><?php echo esc_html( sprintf( '%d spreads, %d photos uploaded', count( $design['spreads'] ), $photos ) ); ?></p>
+	<p><strong>Cover:</strong> <?php echo esc_html( sad_cover_label( $design['cover'] ) ); ?><?php echo sad_cover_is_printed( $design['cover'] ) ? '' : ' <span class="description">(no print file; tell your printer this choice)</span>'; ?></p>
 	<p class="description"><?php echo esc_html( sprintf( 'Each spread exports at %d x %d px (%d dpi, bleed included).', $geo['canvas_w'], $geo['canvas_h'], $geo['dpi'] ) ); ?></p>
 
 	<?php if ( 'publish' === $post->post_status ) : ?>
 		<p><a href="<?php echo esc_url( sad_album_link( $post->ID ) ); ?>" target="_blank" rel="noopener">View the design</a></p>
 		<hr>
-		<div id="sad-export" data-album="<?php echo (int) $post->ID; ?>" data-spreads="<?php echo count( $design['spreads'] ); ?>">
+		<div id="sad-export" data-album="<?php echo (int) $post->ID; ?>" data-spreads="<?php echo count( $design['spreads'] ); ?>" data-cover="<?php echo sad_cover_is_printed( $design['cover'] ) ? '1' : '0'; ?>">
 			<button type="button" class="button button-primary" id="sad-export-btn">Build print files</button>
 			<p id="sad-export-progress" class="description"></p>
 			<ul id="sad-export-links">
@@ -210,6 +211,8 @@ function sad_album_column_content( $column, $post_id ) {
 		echo 'approved' === sad_album_status( $post_id ) ? '<strong>Approved</strong>' : 'Designing';
 	} elseif ( 'sad_album' === $column ) {
 		echo esc_html( sad_album_config( $post_id )['size']['name'] );
+	} elseif ( 'sad_cover' === $column ) {
+		echo esc_html( sad_cover_label( sad_get_design( $post_id )['cover'] ) );
 	} elseif ( 'sad_photos' === $column ) {
 		echo esc_html( count( sad_get_photos( $post_id ) ) );
 	} elseif ( 'sad_spreads' === $column ) {

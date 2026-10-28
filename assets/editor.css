@@ -1434,3 +1434,448 @@ html.sad-locked body {
 #sad-app .sad-side .sad-layout {
 	width: 100%;
 }
+
+/* ------------------------------------------------------------------
+ * Finish: calmer palette, softer edges, consistent type, and text that
+ * always wraps inside its box whatever font the site theme uses.
+ * ------------------------------------------------------------------ */
+
+#sad-app.sad-app,
+#sad-start.sad-app {
+	--sad-ink: #24211d;
+	--sad-muted: #857e74;
+	--sad-line: #e7e2da;
+	--sad-bg: #f4f1ec;
+	--sad-accent: #24211d;
+	--sad-select: #a8875a;
+	--sad-danger: #a5402d;
+	--sad-radius: 8px;
+	font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.45;
+	-webkit-font-smoothing: antialiased;
+}
+
+#sad-app button,
+#sad-app .sad-btn,
+#sad-app .sad-help,
+#sad-app .sad-template,
+#sad-app .sad-template * {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+#sad-app .sad-title,
+#sad-start .sad-title,
+#sad-start h2,
+#sad-start h3 {
+	font-family: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+}
+
+#sad-app.sad-app--full .sad-title {
+	font-size: 1.35rem;
+	line-height: 1.15;
+}
+
+#sad-app .sad-size,
+#sad-app .sad-status {
+	font-size: 0.78rem;
+	color: var(--sad-muted);
+	letter-spacing: 0.02em;
+}
+
+#sad-app h3,
+#sad-start h3 {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-tools__title {
+	font-size: 0.72rem;
+	margin-bottom: 2px;
+}
+
+/* Buttons */
+
+:is(#sad-app, #sad-start) .sad-btn {
+	border-radius: 6px;
+	padding: 8px 14px;
+	font-size: 0.85rem;
+	font-weight: 500;
+	line-height: 1.2;
+	border: 1px solid var(--sad-line);
+	background: #fff;
+	color: var(--sad-ink);
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+:is(#sad-app, #sad-start) .sad-btn:hover {
+	background: #faf8f5;
+	border-color: #cfc8bd;
+	color: var(--sad-ink);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary,
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: var(--sad-ink);
+	border-color: var(--sad-ink);
+	color: #fff;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--primary:hover {
+	background: #3a352f;
+}
+
+:is(#sad-app, #sad-start) .sad-btn--danger,
+:is(#sad-app, #sad-start) .sad-btn--danger:hover {
+	color: var(--sad-danger);
+}
+
+:is(#sad-app, #sad-start) .sad-btn--icon {
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#sad-app .sad-home {
+	border-radius: 6px;
+}
+
+/* Header */
+
+#sad-app.sad-app--full .sad-header {
+	padding: 10px 20px;
+	box-shadow: 0 1px 0 var(--sad-line), 0 4px 16px rgba(36, 33, 29, 0.04);
+	border-bottom: 0;
+	position: relative;
+	z-index: 2;
+}
+
+/* Panels */
+
+#sad-app.sad-app--full .sad-side,
+#sad-app.sad-app--full .sad-tools {
+	background: #fff;
+	border-color: var(--sad-line);
+}
+
+#sad-app .sad-tools {
+	border-radius: var(--sad-radius);
+}
+
+#sad-app.sad-app--full .sad-tools {
+	border-radius: 0;
+	padding: 16px;
+}
+
+#sad-app .sad-tab {
+	font-size: 0.8rem;
+	letter-spacing: 0.04em;
+	padding: 12px 6px;
+}
+
+#sad-app .sad-tab[aria-selected="true"] {
+	border-bottom-color: var(--sad-select);
+}
+
+/* Photo tray */
+
+#sad-app .sad-photo {
+	border-radius: 6px;
+	border: 2px solid transparent;
+	background: var(--sad-bg);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+#sad-app .sad-photo img {
+	border-radius: 4px;
+}
+
+#sad-app .sad-photo__where {
+	border-radius: 0 0 4px 4px;
+}
+
+#sad-app .sad-tray {
+	align-content: start;
+}
+
+#sad-app .sad-photo:hover {
+	box-shadow: 0 4px 12px rgba(36, 33, 29, 0.15);
+}
+
+#sad-app .sad-photo--armed,
+#sad-app .sad-photo--selected {
+	border-color: var(--sad-select);
+}
+
+#sad-app .sad-photo--used img {
+	opacity: 0.6;
+}
+
+#sad-app .sad-photo__used {
+	background: var(--sad-select);
+}
+
+/* Layouts and auto-fill cards */
+
+#sad-app .sad-layout,
+#sad-app .sad-template {
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #fff;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#sad-app .sad-layout:hover,
+#sad-app .sad-template:hover {
+	border-color: #cfc8bd;
+	background: #fff;
+	box-shadow: 0 2px 10px rgba(36, 33, 29, 0.06);
+}
+
+#sad-app .sad-layout--active,
+#sad-app .sad-template--active,
+#sad-app .sad-layout--active:hover,
+#sad-app .sad-template--active:hover {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+}
+
+#sad-app .sad-layout__box {
+	background: #cdc6bb;
+	border-radius: 1px;
+}
+
+#sad-app .sad-template strong {
+	font-family: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-size: 1.15rem;
+	font-weight: 500;
+}
+
+/* Stage */
+
+#sad-app.sad-app--full .sad-workspace {
+	background: var(--sad-bg);
+}
+
+#sad-app .sad-stage {
+	box-shadow: 0 1px 2px rgba(36, 33, 29, 0.08), 0 12px 32px rgba(36, 33, 29, 0.14);
+}
+
+#sad-app .sad-page-labels {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 100%;
+	display: flex;
+	padding-top: 10px;
+	pointer-events: none;
+}
+
+#sad-app .sad-page-labels span {
+	flex: 1;
+	text-align: center;
+	font-size: 0.72rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--sad-muted);
+}
+
+/* Spread strip */
+
+#sad-app .sad-thumb {
+	border-radius: 6px;
+	padding: 4px;
+	border: 2px solid transparent;
+}
+
+#sad-app .sad-thumb:hover .sad-mini {
+	box-shadow: 0 4px 14px rgba(36, 33, 29, 0.18);
+}
+
+#sad-app .sad-thumb--active,
+#sad-app .sad-thumb--active:hover {
+	border-color: var(--sad-select);
+}
+
+#sad-app .sad-mini {
+	box-shadow: 0 1px 4px rgba(36, 33, 29, 0.14);
+}
+
+#sad-app .sad-thumb__num {
+	font-size: 0.72rem;
+	color: var(--sad-muted);
+}
+
+#sad-app .sad-thumb__pages {
+	display: flex;
+	justify-content: space-between;
+	gap: 4px;
+}
+
+#sad-app .sad-thumb__pages span:nth-child(2) {
+	color: var(--sad-ink);
+	font-weight: 600;
+}
+
+#sad-app .sad-thumb--add {
+	border: 1px dashed #cfc8bd;
+	border-radius: 6px;
+	color: var(--sad-muted);
+}
+
+/* Settings panel */
+
+#sad-app .sad-seg {
+	border-radius: 6px;
+	overflow: hidden;
+	border-color: var(--sad-line);
+}
+
+#sad-app .sad-seg__btn {
+	line-height: 1.2;
+	padding: 8px 6px;
+	font-size: 0.8rem;
+}
+
+#sad-app .sad-tools .sad-zoom {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	gap: 8px;
+	align-items: center;
+}
+
+#sad-app .sad-tools label.sad-zoom {
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	font-size: 0.85rem;
+}
+
+#sad-app .sad-tools .sad-num {
+	width: 100%;
+	border-radius: 6px;
+}
+
+#sad-app .sad-lowres {
+	border-radius: 6px;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+#sad-app .sad-tools__label {
+	margin: 6px 0 0;
+	font-size: 0.85rem;
+}
+
+#sad-app .sad-choice {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#sad-app .sad-choice__btn {
+	text-align: left;
+	padding: 10px 12px;
+	border: 1px solid var(--sad-line);
+	border-radius: 6px;
+	background: #fff;
+	color: var(--sad-ink);
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+#sad-app .sad-choice__btn:hover {
+	border-color: #cfc8bd;
+	background: #fff;
+	color: var(--sad-ink);
+}
+
+#sad-app .sad-choice__btn[aria-checked="true"] {
+	border-color: var(--sad-select);
+	box-shadow: 0 0 0 1px var(--sad-select);
+	font-weight: 600;
+}
+
+#sad-app .sad-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+#sad-app .sad-swatch {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px var(--sad-line);
+	cursor: pointer;
+	padding: 0;
+}
+
+#sad-app .sad-swatch:hover {
+	box-shadow: 0 0 0 1px #cfc8bd;
+}
+
+#sad-app .sad-swatch[aria-checked="true"] {
+	box-shadow: 0 0 0 2px var(--sad-select);
+}
+
+/* Cover materials: subtle grain over the chosen colour */
+
+#sad-app .sad-material--leather {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.22) 80%),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.16' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -0.9 0.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 100% 100%, 110px 110px, 80px 80px;
+}
+
+#sad-app .sad-material--linen {
+	background-image:
+		radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.14) 85%),
+		repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+		repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 3px),
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#sad-app .sad-mini.sad-material--leather {
+	background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+#sad-app .sad-stitch {
+	position: absolute;
+	border: 1.5px dashed var(--sad-stitch);
+	border-radius: 3px;
+	pointer-events: none;
+}
+
+#sad-app .sad-mini .sad-stitch {
+	border-width: 1px;
+}
+
+#sad-app .sad-spine {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 6%;
+	transform: translateX(-50%);
+	background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.22) 45%, rgba(255, 255, 255, 0.06) 55%, transparent);
+	pointer-events: none;
+}
+
+#sad-app .sad-swatch.sad-material--leather,
+#sad-app .sad-swatch.sad-material--linen {
+	background-size: 100% 100%, 30px 30px, 30px 30px;
+}
+
+#sad-app .sad-guides--hidden {
+	display: none;
+}

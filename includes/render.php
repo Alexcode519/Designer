@@ -53,6 +53,9 @@ function sad_export_basename( $album_id ) {
 }
 
 function sad_spread_filename( $album_id, $index ) {
+	if ( 'cover' === $index ) {
+		return sad_export_basename( $album_id ) . '-cover.jpg';
+	}
 	return sprintf( '%s-spread-%02d.jpg', sad_export_basename( $album_id ), $index + 1 );
 }
 
@@ -69,7 +72,8 @@ function sad_memory_ok( $pixels ) {
 }
 
 /**
- * Renders spread $index to a JPEG in the album's export folder.
+ * Renders spread $index (from 0), or the printed cover when $index is "cover", to a JPEG in the
+ * album's export folder. The cover is laid out like a spread: back cover left, front cover right.
  *
  * @return string|WP_Error Path to the JPEG.
  */
@@ -78,7 +82,16 @@ function sad_render_spread_file( $album_id, $index ) {
 		return new WP_Error( 'sad_no_gd', 'The GD image library is not available on this server.', array( 'status' => 500 ) );
 	}
 	$design = sad_get_design( $album_id );
-	if ( ! isset( $design['spreads'][ $index ] ) ) {
+	if ( 'cover' === $index ) {
+		if ( ! sad_cover_is_printed( $design['cover'] ) ) {
+			return new WP_Error( 'sad_not_found', 'This album has a bound cover, which has no print file.', array( 'status' => 404 ) );
+		}
+		$spread = $design['cover'];
+		$label  = 'the cover';
+	} elseif ( isset( $design['spreads'][ $index ] ) ) {
+		$spread = $design['spreads'][ $index ];
+		$label  = sprintf( 'spread %d', $index + 1 );
+	} else {
 		return new WP_Error( 'sad_not_found', 'Spread not found.', array( 'status' => 404 ) );
 	}
 
@@ -89,7 +102,6 @@ function sad_render_spread_file( $album_id, $index ) {
 
 	$geo    = sad_spread_geometry( $album_id );
 	$photos = sad_get_photos( $album_id );
-	$spread = $design['spreads'][ $index ];
 
 	$largest = 0;
 	foreach ( $spread['items'] as $item ) {
@@ -101,7 +113,7 @@ function sad_render_spread_file( $album_id, $index ) {
 	if ( ! sad_memory_ok( $geo['canvas_w'] * $geo['canvas_h'] + $largest ) ) {
 		return new WP_Error(
 			'sad_memory',
-			sprintf( 'Not enough server memory to build spread %d at %d dpi. Lower the export resolution in Settings, or ask your host to raise the PHP memory limit.', $index + 1, $geo['dpi'] ),
+			sprintf( 'Not enough server memory to build %s at %d dpi. Lower the export resolution in Settings, or ask your host to raise the PHP memory limit.', $label, $geo['dpi'] ),
 			array( 'status' => 500 )
 		);
 	}
@@ -119,7 +131,7 @@ function sad_render_spread_file( $album_id, $index ) {
 		$img   = sad_load_image( sad_original_path( $album_id, $photo ) );
 		if ( ! $img ) {
 			imagedestroy( $canvas );
-			return new WP_Error( 'sad_missing_photo', sprintf( 'Could not open photo "%s" on spread %d.', $photo['name'], $index + 1 ), array( 'status' => 500 ) );
+			return new WP_Error( 'sad_missing_photo', sprintf( 'Could not open photo "%s" on %s.', $photo['name'], $label ), array( 'status' => 500 ) );
 		}
 		sad_draw_item( $canvas, $img, $item, $geo );
 		imagedestroy( $img );
@@ -247,6 +259,16 @@ function sad_build_package( $album_id ) {
 	$geo    = sad_spread_geometry( $album_id );
 	$base   = sad_export_basename( $album_id );
 	$files  = array();
+	$cover  = $dir . '/' . sad_spread_filename( $album_id, 'cover' );
+
+	if ( sad_cover_is_printed( $design['cover'] ) ) {
+		if ( ! file_exists( $cover ) ) {
+			return new WP_Error( 'sad_missing_spread', 'The cover has not been built yet.', array( 'status' => 400 ) );
+		}
+		$files[] = $cover;
+	} elseif ( file_exists( $cover ) ) {
+		unlink( $cover );
+	}
 
 	foreach ( array_keys( $design['spreads'] ) as $index ) {
 		$path = $dir . '/' . sad_spread_filename( $album_id, $index );

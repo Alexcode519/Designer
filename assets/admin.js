@@ -1,4 +1,4 @@
-/* Builds print files one spread at a time, then packages them into a PDF and ZIP. */
+/* Builds print files one spread at a time (printed cover first), then packages them into a PDF and ZIP. */
 ( function () {
 	var box = document.getElementById( 'sad-export' );
 	if ( ! box ) {
@@ -9,6 +9,7 @@
 	var list = document.getElementById( 'sad-export-links' );
 	var albumId = box.getAttribute( 'data-album' );
 	var spreads = parseInt( box.getAttribute( 'data-spreads' ), 10 );
+	var printedCover = box.getAttribute( 'data-cover' ) === '1';
 	var base = '/snippets-album/v1/admin/albums/' + albumId;
 
 	function fail( error ) {
@@ -44,8 +45,18 @@
 		} );
 	}
 
+	function renderCover() {
+		if ( ! printedCover ) {
+			return Promise.resolve();
+		}
+		progress.textContent = 'Building the cover…';
+		return wp.apiFetch( { path: base + '/render/cover', method: 'POST' } );
+	}
+
 	button.addEventListener( 'click', function () {
 		button.disabled = true;
-		renderFrom( 0 ).catch( fail );
+		renderCover().then( function () {
+			return renderFrom( 0 );
+		} ).catch( fail );
 	} );
 } )();

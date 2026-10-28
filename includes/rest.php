@@ -65,7 +65,7 @@ function sad_register_routes() {
 	};
 	register_rest_route(
 		SAD_REST_NS,
-		$admin . '/render/(?P<spread>\d+)',
+		$admin . '/render/(?P<spread>\d+|cover)',
 		array(
 			'methods'             => 'POST',
 			'callback'            => 'sad_rest_admin_render',
@@ -123,6 +123,7 @@ function sad_client_payload( $album_id ) {
 		'minDpi'     => (int) $settings['min_dpi_warn'],
 		'bleedMm'    => (float) $settings['bleed_mm'],
 		'safeMm'     => (float) $settings['safe_mm'],
+		'covers'     => sad_cover_materials(),
 		'photos'     => $photos,
 		'design'     => sad_get_design( $album_id ),
 	);
@@ -206,7 +207,8 @@ function sad_rest_approve( WP_REST_Request $request ) {
 
 function sad_rest_admin_render( WP_REST_Request $request ) {
 	$album_id = (int) $request['id'];
-	$result   = sad_render_spread_file( $album_id, (int) $request['spread'] );
+	$spread   = 'cover' === $request['spread'] ? 'cover' : (int) $request['spread'];
+	$result   = sad_render_spread_file( $album_id, $spread );
 	if ( is_wp_error( $result ) ) {
 		return $result;
 	}

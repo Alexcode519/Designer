@@ -132,8 +132,36 @@
 		return g.tw / g.th;
 	}
 
+	/** The spread being edited. The cover is spread -1: back cover on the left, front on the right. */
 	function currentSpread() {
-		return state.design.spreads[ state.current ];
+		return state.current === -1 ? state.design.cover : state.design.spreads[ state.current ];
+	}
+
+	function onCover() {
+		return state.current === -1;
+	}
+
+	/** A leather or linen cover: chosen, not designed, so it holds no photo boxes. */
+	function boundCover() {
+		return onCover() && state.design.cover.type !== 'photo';
+	}
+
+	function coverMaterial( cover ) {
+		return ( state.album.covers || {} )[ cover.type ] || { name: '', colours: {} };
+	}
+
+	function coverColour( cover ) {
+		var colour = coverMaterial( cover ).colours[ cover.colour ];
+		return colour ? colour.hex : '#3b2619';
+	}
+
+	/** Where a spread is, in words: "the cover" or "spread 3". */
+	function spreadName( index ) {
+		return index === -1 ? 'the cover' : 'spread ' + ( index + 1 );
+	}
+
+	function spreadExists( spread ) {
+		return spread === state.design.cover || state.design.spreads.indexOf( spread ) !== -1;
 	}
 
 	function selectedItem() {
@@ -176,19 +204,32 @@
 	}
 
 	/** Spread numbers (from 1) each photo is used on. */
+	/** Where each photo is used: a list of "Cover" and spread numbers. */
 	function usage() {
 		var used = {};
-		state.design.spreads.forEach( function ( spread, n ) {
+		function note( spread, label ) {
 			spread.items.forEach( function ( item ) {
 				if ( item.photo ) {
 					used[ item.photo ] = used[ item.photo ] || [];
-					if ( used[ item.photo ].indexOf( n + 1 ) === -1 ) {
-						used[ item.photo ].push( n + 1 );
+					if ( used[ item.photo ].indexOf( label ) === -1 ) {
+						used[ item.photo ].push( label );
 					}
 				}
 			} );
+		}
+		if ( state.design.cover.type === 'photo' ) {
+			note( state.design.cover, 'Cover' );
+		}
+		state.design.spreads.forEach( function ( spread, n ) {
+			note( spread, n + 1 );
 		} );
 		return used;
+	}
+
+	function usageText( list ) {
+		return list.map( function ( where ) {
+			return where === 'Cover' ? 'cover' : 'spread ' + where;
+		} ).join( ', ' );
 	}
 
 	/** Effective print resolution of a photo in its box, in dots per inch. */
@@ -251,7 +292,7 @@
 
 	function afterHistory() {
 		state.checkpointKey = null;
-		state.current = clamp( state.current, 0, state.design.spreads.length - 1 );
+		state.current = clamp( state.current, -1, state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;
@@ -324,6 +365,10 @@
 	/* ---------- design changes ---------- */
 
 	function setLayout( layoutId ) {
+		if ( boundCover() ) {
+			toast( 'Choose "Printed photo cover" on the right to put photos on the cover.' );
+			return;
+		}
 		var spread = currentSpread();
 		var placed = spread.items.filter( function ( item ) {
 			return item.photo;
@@ -367,6 +412,10 @@
 	 * the trimmed spread), or on the right-hand page.
 	 */
 	function addItem( photoId, at ) {
+		if ( boundCover() ) {
+			toast( 'Choose "Printed photo cover" on the right to put photos on the cover.' );
+			return;
+		}
 		var spread = currentSpread();
 		var g = geo();
 		var photo = photoId && state.photos[ photoId ];
@@ -596,7 +645,7 @@
 	}
 
 	function deleteSpread() {
-		if ( state.design.spreads.length <= 1 ) {
+		if ( onCover() || state.design.spreads.length <= 1 ) {
 			return;
 		}
 		if ( ! window.confirm( 'Delete spread ' + ( state.current + 1 ) + '? The photos stay in your photo tray.' ) ) {
@@ -611,7 +660,7 @@
 
 	function moveSpread( delta ) {
 		var to = state.current + delta;
-		if ( to < 0 || to >= state.design.spreads.length ) {
+		if ( onCover() || to < 0 || to >= state.design.spreads.length ) {
 			return;
 		}
 		checkpoint();
@@ -622,7 +671,7 @@
 	}
 
 	function goTo( index ) {
-		state.current = clamp( index, 0, state.design.spreads.length - 1 );
+		state.current = clamp( index, -1, state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;
@@ -666,8 +715,7 @@
 					.then( function ( photo ) {
 						state.photos[ photo.id ] = photo;
 						state.photoOrder.push( photo.id );
-						var spreadIndex = target ? state.design.spreads.indexOf( target.spread ) : -1;
-						if ( spreadIndex !== -1 && ! isLocked() ) {
+						if ( target && spreadExists( target.spread ) && ! isLocked() ) {
 							var place = target;
 							target = null;
 							if ( place.item && place.spread.items.indexOf( place.item ) !== -1 ) {
@@ -679,7 +727,7 @@
 								changed();
 								return;
 							}
-							if ( place.at && spreadIndex === state.current ) {
+							if ( place.at && place.spread === currentSpread() ) {
 								addItem( photo.id, place.at );
 								return;
 							}
@@ -763,6 +811,16 @@
 
 	function problems() {
 		var list = [];
+		var cover = state.design.cover;
+		if ( cover.type === 'photo' ) {
+			if ( ! cover.items.length ) {
+				list.push( 'The printed cover has no photos. Add some, or choose leather or linen.' );
+			} else if ( cover.items.some( function ( item ) {
+				return ! item.photo || ! state.photos[ item.photo ];
+			} ) ) {
+				list.push( 'The cover has an empty photo box. Add a photo or delete the box.' );
+			}
+		}
 		if ( state.design.spreads.length < state.album.minSpreads ) {
 			list.push( 'Your album needs at least ' + state.album.minSpreads + ' spreads (it has ' + state.design.spreads.length + ').' );
 		}
@@ -780,6 +838,9 @@
 
 	function lowResolution() {
 		var list = [];
+		if ( state.design.cover.type === 'photo' && state.design.cover.items.some( isLowRes ) ) {
+			list.push( 'cover' );
+		}
 		state.design.spreads.forEach( function ( spread, n ) {
 			if ( spread.items.some( isLowRes ) ) {
 				list.push( n + 1 );
@@ -797,7 +858,9 @@
 		var soft = lowResolution();
 		var message = 'Approve your album for printing?\n\nAfter you approve, the design is locked and goes to print. Please check every spread first, and keep faces and text inside the green safe lines.';
 		if ( soft.length ) {
-			message += '\n\nSome photos may print soft because they are enlarged a lot (spreads ' + soft.join( ', ' ) + ').';
+			message += '\n\nSome photos may print soft because they are enlarged a lot (' + soft.map( function ( where ) {
+				return where === 'cover' ? 'the cover' : 'spread ' + where;
+			} ).join( ', ' ) + ').';
 		}
 		if ( ! window.confirm( message ) ) {
 			return;
@@ -1214,15 +1277,53 @@
 		dom.stage.style.width = width + 'px';
 		dom.stage.style.height = g.ch * state.scale + 'px';
 		dom.canvas.innerHTML = '';
-		dom.itemNodes = drawItems( dom.canvas, spread, state.scale, g.b, true );
+		paintCover( dom.canvas, onCover() ? spread : null, state.scale, g.b );
+		dom.itemNodes = boundCover() ? [] : drawItems( dom.canvas, spread, state.scale, g.b, true );
 		dom.canvas.classList.toggle( 'sad-canvas--armed', !! state.armedPhoto );
+		dom.pageLabels.hidden = ! onCover();
+		dom.guides.classList.toggle( 'sad-guides--hidden', boundCover() );
+		dom.legend.hidden = boundCover();
 		renderGuides();
 		renderSelection();
 		renderLowResNotice();
 
-		dom.spreadLabel.textContent = 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
-		dom.prev.disabled = state.current === 0;
+		dom.spreadLabel.textContent = onCover() ? 'Cover' : 'Spread ' + ( state.current + 1 ) + ' of ' + state.design.spreads.length;
+		dom.prev.disabled = state.current === -1;
+		dom.spreadTools.hidden = isLocked() || onCover();
 		dom.next.disabled = state.current === state.design.spreads.length - 1;
+	}
+
+	/**
+	 * Shows a leather or linen cover's material and stitching on `node`, or clears it. Stitching
+	 * runs round each board (back and front), clear of the spine.
+	 */
+	function paintCover( node, cover, scale, off ) {
+		var bound = cover && cover.type !== 'photo';
+		node.classList.remove( 'sad-material--leather', 'sad-material--linen' );
+		node.style.backgroundColor = '';
+		node.style.removeProperty( '--sad-stitch' );
+		if ( ! bound ) {
+			return;
+		}
+		var hex = coverColour( cover );
+		node.classList.add( 'sad-material--' + cover.type );
+		node.style.backgroundColor = hex;
+		var rgb = parseInt( hex.slice( 1 ), 16 );
+		var light = ( ( rgb >> 16 ) * 0.299 + ( ( rgb >> 8 ) & 255 ) * 0.587 + ( rgb & 255 ) * 0.114 ) > 150;
+		node.style.setProperty( '--sad-stitch', light ? 'rgba(60, 45, 30, 0.45)' : 'rgba(255, 244, 225, 0.55)' );
+		var g = geo();
+		var inset = Math.min( g.th, g.tw / 2 ) * 0.07;
+		[ 0, g.tw / 2 ].forEach( function ( left ) {
+			var stitch = el( 'div', { class: 'sad-stitch', 'aria-hidden': 'true' } );
+			stitch.style.left = ( off + left + inset ) * scale + 'px';
+			stitch.style.top = ( off + inset ) * scale + 'px';
+			stitch.style.width = ( g.tw / 2 - 2 * inset ) * scale + 'px';
+			stitch.style.height = ( g.th - 2 * inset ) * scale + 'px';
+			node.appendChild( stitch );
+		} );
+		var spine = el( 'div', { class: 'sad-spine', 'aria-hidden': 'true' } );
+		spine.style.left = ( off + g.tw / 2 ) * scale + 'px';
+		node.appendChild( spine );
 	}
 
 	function box( node, x, y, w, h ) {
@@ -1427,6 +1528,10 @@
 			return;
 		}
 		var item = selectedItem();
+		if ( ! item && onCover() ) {
+			renderCoverTools();
+			return;
+		}
 		if ( ! item ) {
 			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Drag photos onto the spread to add them, or onto a box to fill it. Click a box to move it, resize it from the corners, or turn it with the round handle. Keep faces inside the green lines; anything past the red line is trimmed off.' } ) );
 			return;
@@ -1497,6 +1602,70 @@
 		}
 	}
 
+	/** Cover material and colour, shown when the cover is open and no photo box is selected. */
+	function renderCoverTools() {
+		var cover = state.design.cover;
+		var covers = state.album.covers || {};
+		dom.slotTools.appendChild( el( 'h3', { class: 'sad-tools__title', text: 'Cover' } ) );
+		var types = el( 'div', { class: 'sad-choice', role: 'radiogroup', 'aria-label': 'Cover type' } );
+		Object.keys( covers ).forEach( function ( type ) {
+			types.appendChild( el( 'button', {
+				type: 'button',
+				role: 'radio',
+				class: 'sad-choice__btn',
+				'aria-checked': cover.type === type ? 'true' : 'false',
+				text: covers[ type ].name,
+				onclick: function () {
+					if ( cover.type === type ) {
+						return;
+					}
+					checkpoint();
+					cover.type = type;
+					var colours = Object.keys( covers[ type ].colours || {} );
+					if ( colours.length && colours.indexOf( cover.colour ) === -1 ) {
+						cover.colour = colours[ 0 ];
+					}
+					if ( type === 'photo' && ! cover.items.length ) {
+						// Start with one photo on the front cover.
+						var g = geo();
+						var bx = g.b / g.tw;
+						var by = g.b / g.th;
+						cover.items = [ newItem( null, 0.5, -by, 0.5 + bx, 1 + 2 * by ) ];
+					}
+					changed();
+				},
+			} ) );
+		} );
+		dom.slotTools.appendChild( types );
+
+		var colours = ( covers[ cover.type ] || {} ).colours || {};
+		if ( Object.keys( colours ).length ) {
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-tools__label', text: 'Colour: ' + ( colours[ cover.colour ] ? colours[ cover.colour ].name : '' ) } ) );
+			var swatches = el( 'div', { class: 'sad-swatches', role: 'radiogroup', 'aria-label': 'Cover colour' } );
+			Object.keys( colours ).forEach( function ( id ) {
+				var swatch = el( 'button', {
+					type: 'button',
+					role: 'radio',
+					class: 'sad-swatch sad-material--' + cover.type,
+					title: colours[ id ].name,
+					'aria-label': colours[ id ].name,
+					'aria-checked': cover.colour === id ? 'true' : 'false',
+					onclick: function () {
+						checkpoint();
+						cover.colour = id;
+						changed();
+					},
+				} );
+				swatch.style.backgroundColor = colours[ id ].hex;
+				swatches.appendChild( swatch );
+			} );
+			dom.slotTools.appendChild( swatches );
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'A bound ' + covers[ cover.type ].name.toLowerCase() + ' cover. The colour on screen is a guide; real materials vary slightly.' } ) );
+		} else {
+			dom.slotTools.appendChild( el( 'p', { class: 'sad-help', text: 'Design the cover like a spread: the left half is the back cover and the right half is the front. Drag photos onto it, or pick a layout.' } ) );
+		}
+	}
+
 	/* ---------- panels ---------- */
 
 	function layoutIcon( slots ) {
@@ -1539,12 +1708,26 @@
 		container.innerHTML = '';
 		container.style.width = width + 'px';
 		container.style.height = g.th * scale + 'px';
-		drawItems( container, spread, scale, 0, false );
+		var cover = spread === state.design.cover;
+		paintCover( container, cover ? spread : null, scale, 0 );
+		if ( ! cover || spread.type === 'photo' ) {
+			drawItems( container, spread, scale, 0, false );
+		}
 		container.appendChild( el( 'div', { class: 'sad-fold', 'aria-hidden': 'true' } ) );
 	}
 
 	function renderStrip() {
 		dom.strip.innerHTML = '';
+		var coverMini = el( 'div', { class: 'sad-mini' } );
+		drawThumb( coverMini, state.design.cover, 120 );
+		dom.strip.appendChild( el( 'button', {
+			type: 'button',
+			class: 'sad-thumb sad-thumb--cover' + ( onCover() ? ' sad-thumb--active' : '' ),
+			'aria-label': 'Go to the cover',
+			onclick: function () {
+				goTo( -1 );
+			},
+		}, [ coverMini, el( 'span', { class: 'sad-thumb__num sad-thumb__pages' }, [ el( 'span', { text: 'Back' } ), el( 'span', { text: 'Cover' } ), el( 'span', { text: 'Front' } ) ] ) ] ) );
 		state.design.spreads.forEach( function ( spread, index ) {
 			var mini = el( 'div', { class: 'sad-mini' } );
 			drawThumb( mini, spread, 120 );
@@ -1579,7 +1762,7 @@
 		}
 		state.photoOrder.forEach( function ( id ) {
 			var photo = state.photos[ id ];
-			var where = used[ id ] ? 'Used on spread ' + used[ id ].join( ', ' ) : '';
+			var where = used[ id ] ? 'Used on ' + usageText( used[ id ] ) : '';
 			var img = el( 'img', { src: photo.preview, alt: photo.name, loading: 'lazy', draggable: 'false' } );
 			var item = el( 'div', {
 				class: 'sad-photo' + ( state.armedPhoto === id ? ' sad-photo--armed' : '' ) + ( used[ id ] ? ' sad-photo--used' : '' ) + ( state.selected[ id ] ? ' sad-photo--selected' : '' ),
@@ -1592,7 +1775,7 @@
 			}, [
 				img,
 				used[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__used', text: '✓' } ) : null,
-				used[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__where', text: 'Spread ' + used[ id ].join( ', ' ) } ) : null,
+				used[ id ] && ! state.selecting ? el( 'span', { class: 'sad-photo__where', text: ( used[ id ][ 0 ] === 'Cover' ? '' : 'Spread ' ) + used[ id ].join( ', ' ) } ) : null,
 				state.selecting ? el( 'span', { class: 'sad-photo__check', 'aria-hidden': 'true', text: state.selected[ id ] ? '✓' : '' } ) : null,
 			] );
 
@@ -1713,7 +1896,6 @@
 		dom.approve.disabled = false;
 		dom.banner.hidden = ! isLocked();
 		dom.status.hidden = isLocked();
-		dom.spreadTools.hidden = isLocked();
 		dom.editTools.hidden = isLocked();
 		dom.upload.hidden = isLocked();
 	}
@@ -1772,6 +1954,9 @@
 			}
 			if ( state.armedPhoto ) {
 				addItem( state.armedPhoto, stagePoint( event ) );
+				return;
+			}
+			if ( boundCover() ) {
 				return;
 			}
 			if ( state.selectedItem !== null || state.swapFrom !== null ) {
@@ -1893,7 +2078,8 @@
 		dom.canvas = el( 'div', { class: 'sad-canvas' } );
 		dom.guides = el( 'div', { class: 'sad-guides', 'aria-hidden': 'true' } );
 		dom.overlay = el( 'div', { class: 'sad-overlay' } );
-		dom.stage = el( 'div', { class: 'sad-stage' }, [ dom.canvas, dom.guides, dom.overlay ] );
+		dom.pageLabels = el( 'div', { class: 'sad-page-labels', 'aria-hidden': 'true', hidden: true }, [ el( 'span', { text: 'Back cover' } ), el( 'span', { text: 'Front cover' } ) ] );
+		dom.stage = el( 'div', { class: 'sad-stage' }, [ dom.canvas, dom.guides, dom.overlay, dom.pageLabels ] );
 		dom.stageWrap = el( 'div', { class: 'sad-stage-wrap' }, [ dom.stage ] );
 		dom.itemNodes = [];
 		dom.lowres = el( 'div', { class: 'sad-lowres', hidden: true, text: '⚠ A photo on this spread is enlarged more than its resolution allows and may print soft. Make its box smaller, zoom out, or choose a larger photo.' } );
@@ -2094,7 +2280,7 @@
 			state.photos[ photo.id ] = photo;
 			state.photoOrder.push( photo.id );
 		} );
-		state.current = clamp( state.current, 0, state.design.spreads.length - 1 );
+		state.current = clamp( state.current, -1, state.design.spreads.length - 1 );
 		state.selectedItem = null;
 		state.adjusting = false;
 		state.swapFrom = null;

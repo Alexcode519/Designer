@@ -17,7 +17,8 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Drags photos from the photo panel (always beside the spread) onto a box to fill it, or onto an empty part of the spread to add a new box. Photos can also be dropped straight from their computer. On a phone: tap a photo, then tap a box or an empty spot.
 - Chooses per box whether the photo fills the box (cropped; zoom with the mouse wheel, + and − or the slider, and "Move photo in box" to reposition it) or shows whole. Swaps the photos of two boxes, duplicates or deletes boxes.
 - Sees red trim lines (anything outside is cut off) and green safe-area lines (keep faces inside) on every spread.
-- Sees a tick and "Spread N" on photos already used.
+- Chooses the cover on the cover spread (first in the strip, back cover left and front cover right): leather or linen in a choice of colours, shown with stitching, or a printed photo cover they design like a spread.
+- Sees a tick and "Spread N" (or "Cover") on photos already used.
 - Undoes and redoes changes (buttons or Ctrl+Z / Ctrl+Y). Arrow keys nudge the selected box by 1 mm (10 mm with Shift); Delete removes it.
 - Uses **Auto-fill** to lay out all their photos (or only the ones they select) in one click, in one of three styles: Classic (framed), Bold (edge to edge) or Story (more photos per spread). They can change anything afterwards.
 - Adds, deletes and reorders spreads, within the minimum and maximum you set.
@@ -30,7 +31,7 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 - Get an email when a client starts an album and when they approve. The client gets a confirmation email too.
 - Optionally set an **access code** in Settings so only clients you give it to can start an album.
 - Create an album yourself under **Client albums > Add client album** if you prefer.
-- Click **Build print files** to get a PDF and a ZIP of JPEG spreads at 300 dpi, with 3 mm bleed on every edge. The PDF has the trim and bleed boxes set.
+- Click **Build print files** to get a PDF and a ZIP of JPEG spreads at 300 dpi, with 3 mm bleed on every edge. The PDF has the trim and bleed boxes set. A printed photo cover comes first, at the same size as a spread; for leather and linen covers the album page and the approval email show the material and colour to order.
 - Click **Unlock for changes** if a client needs to edit an approved album.
 
 ## Install
@@ -69,7 +70,6 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 
 ## Not in this first version
 
-- Covers (spreads only for now)
 - Text on pages (planned next)
 - Background colours other than white (planned next)
 - Image adjustments such as borders, brightness and opacity
@@ -80,4 +80,5 @@ Use your printer's trimmed **page** size (one side of the spread, without bleed)
 - PHP 7.4+, WordPress 6.2+, with the GD image library (standard on most hosts). No build step.
 - `includes/render.php` and `assets/editor.js` share the crop and rotation logic. If you change one, change the other.
 - Designs saved by version 0.2 and earlier (fixed layout spaces) are converted to photo boxes automatically when opened.
-- Filters: `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.
+- Covers are drawn at spread size for now. If your printer needs a different cover size (wrap and spine), that needs adding as a cover size setting.
+- Filters: `sad_cover_materials` changes the cover materials and colours. `sad_layouts` adds or changes spread layouts. `sad_templates` adds or changes auto-fill styles. `sad_chunk_size` changes the upload piece size.

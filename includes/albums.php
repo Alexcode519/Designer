@@ -157,6 +157,39 @@ function sad_clamp( $value, $min, $max ) {
 	return min( $max, max( $min, (float) $value ) );
 }
 
+/**
+ * Cleans a list of photo boxes (see sad_get_design() for the fields).
+ */
+function sad_sanitize_items( $album_id, $items_in, $photos = null ) {
+	$photos = null === $photos ? sad_get_photos( $album_id ) : $photos;
+	$items = array();
+	foreach ( array_slice( (array) $items_in, 0, 60 ) as $item ) {
+		if ( ! is_array( $item ) ) {
+			continue;
+		}
+		$photo = isset( $item['photo'] ) && is_string( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ? $item['photo'] : null;
+		$rot   = fmod( (float) ( $item['rot'] ?? 0 ), 360 );
+		if ( $rot > 180 ) {
+			$rot -= 360;
+		} elseif ( $rot <= -180 ) {
+			$rot += 360;
+		}
+		$items[] = array(
+			'photo' => $photo,
+			'x'     => sad_clamp( $item['x'] ?? 0, -1, 2 ),
+			'y'     => sad_clamp( $item['y'] ?? 0, -1, 2 ),
+			'w'     => sad_clamp( $item['w'] ?? 0.25, 0.005, 2 ),
+			'h'     => sad_clamp( $item['h'] ?? 0.25, 0.005, 2 ),
+			'rot'   => round( $rot, 2 ),
+			'fit'   => isset( $item['fit'] ) && 'fit' === $item['fit'] ? 'fit' : 'fill',
+			'zoom'  => sad_clamp( $item['zoom'] ?? 1, 1, 5 ),
+			'px'    => sad_clamp( $item['px'] ?? 0.5, 0, 1 ),
+			'py'    => sad_clamp( $item['py'] ?? 0.5, 0, 1 ),
+		);
+	}
+	return $items;
+}
+
 function sad_sanitize_design( $album_id, $design ) {
 	$layouts = sad_layouts();
 	$photos  = sad_get_photos( $album_id );
@@ -182,35 +215,14 @@ function sad_sanitize_design( $album_id, $design ) {
 			$spread['items'] = $items;
 		}
 
-		$items = array();
-		foreach ( array_slice( (array) ( $spread['items'] ?? array() ), 0, 60 ) as $item ) {
-			if ( ! is_array( $item ) ) {
-				continue;
-			}
-			$photo = isset( $item['photo'] ) && is_string( $item['photo'] ) && isset( $photos[ $item['photo'] ] ) ? $item['photo'] : null;
-			$rot   = fmod( (float) ( $item['rot'] ?? 0 ), 360 );
-			if ( $rot > 180 ) {
-				$rot -= 360;
-			} elseif ( $rot <= -180 ) {
-				$rot += 360;
-			}
-			$items[] = array(
-				'photo' => $photo,
-				'x'     => sad_clamp( $item['x'] ?? 0, -1, 2 ),
-				'y'     => sad_clamp( $item['y'] ?? 0, -1, 2 ),
-				'w'     => sad_clamp( $item['w'] ?? 0.25, 0.005, 2 ),
-				'h'     => sad_clamp( $item['h'] ?? 0.25, 0.005, 2 ),
-				'rot'   => round( $rot, 2 ),
-				'fit'   => isset( $item['fit'] ) && 'fit' === $item['fit'] ? 'fit' : 'fill',
-				'zoom'  => sad_clamp( $item['zoom'] ?? 1, 1, 5 ),
-				'px'    => sad_clamp( $item['px'] ?? 0.5, 0, 1 ),
-				'py'    => sad_clamp( $item['py'] ?? 0.5, 0, 1 ),
-			);
-		}
+		$items     = sad_sanitize_items( $album_id, $spread['items'] ?? array(), $photos );
 		$spreads[] = array( 'layout' => $layout, 'items' => $items );
 	}
 
-	return array( 'spreads' => $spreads );
+	return array(
+		'cover'   => sad_sanitize_cover( $album_id, $design['cover'] ?? null ),
+		'spreads' => $spreads,
+	);
 }
 
 function sad_save_design( $album_id, $design ) {
@@ -228,6 +240,13 @@ function sad_design_problems( $album_id, $design ) {
 	$problems = array();
 	if ( count( $design['spreads'] ) < $config['min_spreads'] ) {
 		$problems[] = sprintf( 'Your album needs at least %d spreads.', $config['min_spreads'] );
+	}
+	if ( sad_cover_is_printed( $design['cover'] ) ) {
+		if ( ! $design['cover']['items'] ) {
+			$problems[] = 'The printed cover has no photos.';
+		} elseif ( array_filter( wp_list_pluck( $design['cover']['items'], 'photo' ) ) !== wp_list_pluck( $design['cover']['items'], 'photo' ) ) {
+			$problems[] = 'The cover has an empty photo box.';
+		}
 	}
 	foreach ( $design['spreads'] as $n => $spread ) {
 		if ( ! $spread['items'] ) {
@@ -257,9 +276,10 @@ function sad_approve_album( $album_id ) {
 		$to,
 		sprintf( 'Album approved: %s', sad_album_title( $album_id ) ),
 		sprintf(
-			"%s has approved their album design \"%s\".\n\nOpen it to download the print files:\n%s\n",
+			"%s has approved their album design \"%s\".\n\nCover: %s\n\nOpen it to download the print files:\n%s\n",
 			$client ? $client : 'Your client',
 			sad_album_title( $album_id ),
+			sad_cover_label( sad_get_design( $album_id )['cover'] ),
 			$edit
 		)
 	);
