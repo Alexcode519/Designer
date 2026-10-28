@@ -23,6 +23,7 @@ require_once SAD_DIR . 'includes/storage.php';
 require_once SAD_DIR . 'includes/albums.php';
 require_once SAD_DIR . 'includes/rest.php';
 require_once SAD_DIR . 'includes/shortcode.php';
+require_once SAD_DIR . 'includes/start.php';
 require_once SAD_DIR . 'includes/render.php';
 require_once SAD_DIR . 'includes/pdf.php';
 require_once SAD_DIR . 'includes/admin.php';

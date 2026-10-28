@@ -8,7 +8,9 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 
 **For the client** (works on phone, tablet and computer, from any country):
 
-- Opens a private link you send them. No account or app needed.
+- Starts their own album on the Album Designer page: enters their names, email and album size, and gets their private link by email. (Or you create the album for them and send the link.)
+- Can ask for their link to be emailed again with "Already started?" on the same page.
+- Opens their private link. No account or app needed.
 - Uploads photos (JPEG or PNG). Large photos are sent in small pieces, so the hosting upload limit doesn't matter.
 - Picks a layout for each spread from 10 options, then drags photos into the spaces (on a phone: tap a photo, then tap a space).
 - Taps a placed photo to zoom it and drag it into position, or drags one placed photo onto another to swap them.
@@ -19,8 +21,10 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 
 **For you:**
 
-- Create one album per client under **Client albums > Add client album**: name, email, size and number of spreads.
-- Get an email when a client approves. The client gets a confirmation email too.
+- See every client under **Client albums**: names, email, status, size, photos, spreads and when they last worked on it. Sort by **Last change** to see who's active.
+- Get an email when a client starts an album and when they approve. The client gets a confirmation email too.
+- Optionally set an **access code** in Settings so only clients you give it to can start an album.
+- Create an album yourself under **Client albums > Add client album** if you prefer.
 - Click **Build print files** to get a PDF and a ZIP of JPEG spreads at 300 dpi, with 3 mm bleed on every edge. The PDF has the trim and bleed boxes set.
 - Click **Unlock for changes** if a client needs to edit an approved album.
 
@@ -29,7 +33,10 @@ No monthly fees and no third-party service: everything runs on your own WordPres
 1. On GitHub, open this repository and choose **Code > Download ZIP**.
 2. In WordPress, go to **Plugins > Add New Plugin > Upload Plugin**, choose the ZIP and click **Activate**.
 3. The plugin creates an **Album Designer** page with the `[snippets_album_designer]` shortcode. You can restyle it in Elementor, but keep the shortcode (use Elementor's Shortcode widget). The page is hidden from search engines.
-4. Under **Client albums > Settings**, check the album sizes, bleed and the email address for approvals.
+4. Under **Client albums > Settings**, check the album sizes, bleed, default number of spreads, access code and the email address for notifications.
+5. Link to the Album Designer page from wherever you send clients (an email, your booking confirmation or a button on a private page).
+
+To update the plugin later, upload the new ZIP the same way and choose **Replace current with uploaded**. Albums and photos are kept.
 
 ## Album sizes
 

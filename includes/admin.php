@@ -12,6 +12,8 @@ add_action( 'admin_post_sad_download', 'sad_handle_download' );
 add_action( 'admin_post_sad_unlock', 'sad_handle_unlock' );
 add_filter( 'manage_sad_album_posts_columns', 'sad_album_columns' );
 add_action( 'manage_sad_album_posts_custom_column', 'sad_album_column_content', 10, 2 );
+add_filter( 'manage_edit-sad_album_sortable_columns', 'sad_album_sortable_columns' );
+add_action( 'pre_get_posts', 'sad_album_sort_query' );
 add_filter( 'enter_title_here', 'sad_title_placeholder', 10, 2 );
 
 function sad_title_placeholder( $text, $post ) {
@@ -120,8 +122,9 @@ function sad_save_album_meta( $post_id, $post ) {
 	update_post_meta( $post_id, '_sad_client_email', sanitize_email( wp_unslash( $_POST['sad_client_email'] ?? '' ) ) );
 	update_post_meta( $post_id, '_sad_size', sanitize_title( wp_unslash( $_POST['sad_size'] ?? '' ) ) );
 
-	$min = max( 1, min( 100, (int) ( $_POST['sad_min_spreads'] ?? 10 ) ) );
-	$max = max( $min, min( 100, (int) ( $_POST['sad_max_spreads'] ?? 30 ) ) );
+	$settings = sad_get_settings();
+	$min      = max( 1, min( 100, (int) ( $_POST['sad_min_spreads'] ?? $settings['min_spreads'] ) ) );
+	$max      = max( $min, min( 100, (int) ( $_POST['sad_max_spreads'] ?? $settings['max_spreads'] ) ) );
 	update_post_meta( $post_id, '_sad_min_spreads', $min );
 	update_post_meta( $post_id, '_sad_max_spreads', $max );
 
@@ -172,21 +175,47 @@ function sad_handle_unlock() {
 
 function sad_album_columns( $columns ) {
 	return array(
-		'cb'         => $columns['cb'],
-		'title'      => 'Album',
-		'sad_client' => 'Client',
-		'sad_status' => 'Status',
-		'sad_size'   => 'Spreads',
-		'date'       => $columns['date'],
+		'cb'          => $columns['cb'],
+		'title'       => 'Album',
+		'sad_client'  => 'Client',
+		'sad_status'  => 'Status',
+		'sad_album'   => 'Size',
+		'sad_photos'  => 'Photos',
+		'sad_spreads' => 'Spreads',
+		'sad_updated' => 'Last change',
+		'date'        => 'Started',
 	);
+}
+
+function sad_album_sortable_columns( $columns ) {
+	$columns['sad_updated'] = 'sad_updated';
+	return $columns;
+}
+
+function sad_album_sort_query( $query ) {
+	if ( is_admin() && $query->is_main_query() && 'sad_album' === $query->get( 'post_type' ) && 'sad_updated' === $query->get( 'orderby' ) ) {
+		$query->set( 'meta_key', '_sad_updated_at' );
+		$query->set( 'orderby', 'meta_value_num' );
+	}
 }
 
 function sad_album_column_content( $column, $post_id ) {
 	if ( 'sad_client' === $column ) {
+		$email = get_post_meta( $post_id, '_sad_client_email', true );
 		echo esc_html( get_post_meta( $post_id, '_sad_client_name', true ) );
+		if ( $email ) {
+			echo '<br><a href="mailto:' . esc_attr( $email ) . '">' . esc_html( $email ) . '</a>';
+		}
 	} elseif ( 'sad_status' === $column ) {
 		echo 'approved' === sad_album_status( $post_id ) ? '<strong>Approved</strong>' : 'Designing';
-	} elseif ( 'sad_size' === $column ) {
+	} elseif ( 'sad_album' === $column ) {
+		echo esc_html( sad_album_config( $post_id )['size']['name'] );
+	} elseif ( 'sad_photos' === $column ) {
+		echo esc_html( count( sad_get_photos( $post_id ) ) );
+	} elseif ( 'sad_spreads' === $column ) {
 		echo esc_html( count( sad_get_design( $post_id )['spreads'] ) );
+	} elseif ( 'sad_updated' === $column ) {
+		$updated = (int) get_post_meta( $post_id, '_sad_updated_at', true );
+		echo $updated ? esc_html( sprintf( '%s ago', human_time_diff( $updated ) ) ) : '&mdash;';
 	}
 }

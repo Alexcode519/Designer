@@ -72,7 +72,7 @@ function sad_noindex_designer_page( $robots ) {
 function sad_render_shortcode() {
 	$token = isset( $_GET['album'] ) ? sanitize_key( wp_unslash( $_GET['album'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 	if ( ! $token ) {
-		return '<div class="sad-message">Open this page using the album link we emailed you.</div>';
+		return sad_render_start_page();
 	}
 
 	wp_enqueue_style( 'sad-editor', SAD_URL . 'assets/editor.css', array(), SAD_VERSION );
@@ -99,6 +99,7 @@ function sad_render_shortcode() {
 				'layouts'   => $layouts,
 				'templates' => $templates,
 				'chunkSize' => $chunk,
+				'welcome'   => ! empty( $_GET['sad_welcome'] ), // phpcs:ignore WordPress.Security.NonceVerification
 			)
 		) . ';',
 		'before'

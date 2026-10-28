@@ -197,6 +197,7 @@ function sad_store_photo( $album_id, $source, $filename ) {
 		'added'   => time(),
 	);
 	add_post_meta( $album_id, '_sad_photo', $photo );
+	update_post_meta( $album_id, '_sad_updated_at', time() );
 	return $photo;
 }
 

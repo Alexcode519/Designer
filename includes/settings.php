@@ -26,6 +26,10 @@ function sad_get_settings() {
 		'dpi'          => 300,
 		'notify_email' => get_option( 'admin_email' ),
 		'min_dpi_warn' => 200,
+		'self_start'   => 1,
+		'start_code'   => '',
+		'min_spreads'  => 10,
+		'max_spreads'  => 30,
 	);
 	$saved = get_option( 'sad_settings', array() );
 	return wp_parse_args( is_array( $saved ) ? $saved : array(), $defaults );
@@ -107,6 +111,10 @@ function sad_render_settings_page() {
 				'dpi'          => min( 600, max( 150, (int) ( $_POST['sad_dpi'] ?? 300 ) ) ),
 				'notify_email' => sanitize_email( wp_unslash( $_POST['sad_notify_email'] ?? '' ) ),
 				'min_dpi_warn' => max( 72, (int) ( $_POST['sad_min_dpi_warn'] ?? 200 ) ),
+				'self_start'   => empty( $_POST['sad_self_start'] ) ? 0 : 1,
+				'start_code'   => sanitize_text_field( wp_unslash( $_POST['sad_start_code'] ?? '' ) ),
+				'min_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_min_spreads'] ?? 10 ) ) ),
+				'max_spreads'  => max( 1, min( 100, (int) ( $_POST['sad_default_max_spreads'] ?? 30 ) ) ),
 			)
 		);
 		echo '<div class="notice notice-success"><p>Settings saved.</p></div>';
@@ -144,7 +152,30 @@ function sad_render_settings_page() {
 					<p class="description">Clients see a low-quality warning when a photo is enlarged past this.</p></td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="sad_notify_email">Approval emails go to</label></th>
+					<th scope="row">Clients start their own album</th>
+					<td>
+						<label><input type="checkbox" name="sad_self_start" value="1" <?php checked( $settings['self_start'] ); ?>> Show a start form on the designer page</label>
+						<p class="description">Clients enter their names, email and album size, and get their own private link by email. Turn this off to create every album yourself.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="sad_start_code">Access code (optional)</label></th>
+					<td>
+						<input id="sad_start_code" name="sad_start_code" type="text" value="<?php echo esc_attr( $settings['start_code'] ); ?>" class="regular-text">
+						<p class="description">If set, clients must enter this code to start an album, so only people you give it to can use it. Leave empty to let anyone with the page link start one.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Spreads for new albums</th>
+					<td>
+						<label>Minimum <input name="sad_default_min_spreads" type="number" min="1" max="100" class="small-text" value="<?php echo esc_attr( $settings['min_spreads'] ); ?>"></label>
+						&nbsp;
+						<label>Maximum <input name="sad_default_max_spreads" type="number" min="1" max="100" class="small-text" value="<?php echo esc_attr( $settings['max_spreads'] ); ?>"></label>
+						<p class="description">Used for albums clients start themselves. You can change it per album afterwards.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="sad_notify_email">Notification emails go to</label></th>
 					<td><input id="sad_notify_email" name="sad_notify_email" type="email" value="<?php echo esc_attr( $settings['notify_email'] ); ?>" class="regular-text"></td>
 				</tr>
 				<tr>

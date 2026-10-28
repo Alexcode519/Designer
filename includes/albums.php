@@ -74,13 +74,16 @@ function sad_album_status( $album_id ) {
 }
 
 function sad_album_config( $album_id ) {
-	$size = sad_get_size( get_post_meta( $album_id, '_sad_size', true ) );
-	$min  = (int) get_post_meta( $album_id, '_sad_min_spreads', true );
-	$max  = (int) get_post_meta( $album_id, '_sad_max_spreads', true );
+	$size     = sad_get_size( get_post_meta( $album_id, '_sad_size', true ) );
+	$min      = (int) get_post_meta( $album_id, '_sad_min_spreads', true );
+	$max      = (int) get_post_meta( $album_id, '_sad_max_spreads', true );
+	$settings = sad_get_settings();
+	$min      = $min > 0 ? $min : (int) $settings['min_spreads'];
+	$max      = $max > 0 ? $max : (int) $settings['max_spreads'];
 	return array(
 		'size'        => $size,
-		'min_spreads' => $min > 0 ? $min : 10,
-		'max_spreads' => $max > 0 ? $max : 30,
+		'min_spreads' => $min,
+		'max_spreads' => max( $min, $max ),
 	);
 }
 

@@ -1128,6 +1128,13 @@
 				build();
 			}
 			applyAlbum( data );
+			if ( config.welcome ) {
+				config.welcome = false;
+				toast( 'Your album is ready! We have emailed you this private link so you can come back any time.', 'success' );
+				if ( window.history.replaceState ) {
+					window.history.replaceState( null, '', window.location.href.replace( /[?&]sad_welcome=1/, '' ) );
+				}
+			}
 		} ).catch( function ( error ) {
 			root.innerHTML = '';
 			root.appendChild( el( 'div', { class: 'sad-message', text: error.message } ) );
